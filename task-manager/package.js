@@ -9,7 +9,7 @@ if (!existsSync(outDir)) {
 }
 const outPath = join(outDir, `task-manager-${version}.vsix`);
 
-const command = `pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license --out "${outPath}"`;
+const command = `pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --allow-star-activation --skip-license --out "${outPath}"`;
 try {
   execSync(command, { stdio: 'inherit', shell: true, cwd: __dirname });
   console.log('Packaged Task Manager...', outPath);

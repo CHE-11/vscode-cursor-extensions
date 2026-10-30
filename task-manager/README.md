@@ -52,6 +52,31 @@ The extension activates on `*`, the earliest activation event. The tasks.json fi
 
 Nested project tasks also show up in the built-in **Tasks: Run Task** picker under the project name.
 
+## Split terminals
+
+To run several tasks side by side in one split terminal, add `"split": true` to the `options` of a task that uses `dependsOn`:
+
+```json
+{ "label": "Start Backend",  "type": "shell", "command": "npm run start", "isBackground": true, "options": { "cwd": "${workspaceFolder}/backend",  "statusbar": { "hide": true } } },
+{ "label": "Start Frontend", "type": "shell", "command": "npm run dev",   "isBackground": true, "options": { "cwd": "${workspaceFolder}/frontend", "statusbar": { "hide": true } } },
+{
+  "label": "Run",
+  "dependsOn": ["Start Backend", "Start Frontend"],
+  "options": {
+    "split": true,
+    "statusbar": { "color": "#f1f412" }
+  }
+}
+```
+
+Clicking **Run** opens one terminal split into a Backend pane and a Frontend pane. You don't need to add `presentation.group` to each child.
+
+- `"split": true` uses a group named after the parent task. `"split": "servers"` sets the name, so separate parent tasks can share one split terminal.
+- Split children default to `"panel": "dedicated"`, so running the parent again reuses the same panes.
+- A child that sets its own `presentation.group` keeps it. The standard VS Code way, where each child sets `"presentation": { "group": "groupB" }`, works too.
+- Stop or Restart on the parent stops or restarts every pane.
+- Parallel children start one after another, each as soon as the previous terminal opens. VS Code needs that order to split them into one terminal. They then run at the same time.
+
 ## Status bar options
 
 Put these under `options.statusbar` in any `tasks.json`:

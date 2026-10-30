@@ -111,6 +111,14 @@ function normalizeDependsOn(dependsOn: DependsOnConfig | undefined): string[] {
   return labels;
 }
 
+function getSplitGroup(project: ProjectInfo, label: string, info: TaskConfig): string | undefined {
+  const split = info.options?.split;
+  if (typeof split === 'string' && split) {
+    return split;
+  }
+  return split === true ? `${project.id}::${label}` : undefined;
+}
+
 function resolveStatusBarOptions(info: TaskConfig): StatusBarOptions {
   const statusbar: StatusBarOptions = { ...(info.options?.statusbar ?? {}) };
   if (statusbar.detail === undefined && info.detail !== undefined) {
@@ -264,6 +272,7 @@ export function createProjectTasks(project: ProjectInfo, fileConfig: TasksFileCo
       isBackground: info.isBackground === true,
       dependsOn,
       dependsOrder: info.dependsOrder === 'sequence' ? 'sequence' : 'parallel',
+      splitGroup: getSplitGroup(project, label, info),
       statusbar,
       hidden: isTaskHidden(info, statusbar),
       commandLine: executable ? describeCommandLine(project, info) : dependsOn.length ? `dependsOn: ${dependsOn.join(', ')}` : '',
@@ -433,19 +442,35 @@ const PANEL: Record<string, vscode.TaskPanelKind> = {
   new: vscode.TaskPanelKind.New,
 };
 
-function createPresentation(presentation: PresentationConfig | undefined): vscode.TaskPresentationOptions {
-  if (!presentation) {
-    return {};
+/**
+ * `group` is missing from the typed API but VS Code passes presentation options through to the
+ * terminal task system unchanged, where tasks sharing a group are split into one terminal.
+ */
+type PresentationOptions = vscode.TaskPresentationOptions & { group?: string };
+
+function createPresentation(presentation: PresentationConfig | undefined, splitGroup: string | undefined): PresentationOptions {
+  const options: PresentationOptions = presentation
+    ? {
+        reveal: presentation.reveal ? REVEAL[presentation.reveal] : undefined,
+        panel: presentation.panel ? PANEL[presentation.panel] : undefined,
+        echo: presentation.echo,
+        focus: presentation.focus,
+        showReuseMessage: presentation.showReuseMessage,
+        clear: presentation.clear,
+        close: presentation.close,
+        group: presentation.group,
+      }
+    : {};
+  if (splitGroup && !options.group) {
+    options.group = splitGroup;
+    options.panel ??= vscode.TaskPanelKind.Dedicated;
   }
-  return {
-    reveal: presentation.reveal ? REVEAL[presentation.reveal] : undefined,
-    panel: presentation.panel ? PANEL[presentation.panel] : undefined,
-    echo: presentation.echo,
-    focus: presentation.focus,
-    showReuseMessage: presentation.showReuseMessage,
-    clear: presentation.clear,
-    close: presentation.close,
-  };
+  for (const key of Object.keys(options) as (keyof PresentationOptions)[]) {
+    if (options[key] === undefined) {
+      delete options[key];
+    }
+  }
+  return options;
 }
 
 const GROUPS: Record<string, vscode.TaskGroup> = {
@@ -484,10 +509,15 @@ export function createDefinition(managed: ManagedTask): TaskManagerDefinition {
   return { type: TASK_TYPE, label: managed.label, project: managed.project.folderUri.fsPath };
 }
 
+export interface BuildOptions {
+  /** Terminal group inherited from a parent task with `options.split`. */
+  splitGroup?: string;
+}
+
 /**
  * Builds a runnable vscode.Task. Variables are resolved now so `${file}` reflects the current editor.
  */
-export function buildTask(managed: ManagedTask): vscode.Task | undefined {
+export function buildTask(managed: ManagedTask, buildOptions: BuildOptions = {}): vscode.Task | undefined {
   if (!managed.executable) {
     return undefined;
   }
@@ -505,7 +535,7 @@ export function buildTask(managed: ManagedTask): vscode.Task | undefined {
     getProblemMatchers(info)
   );
   task.isBackground = managed.isBackground;
-  task.presentationOptions = createPresentation(info.presentation);
+  task.presentationOptions = createPresentation(info.presentation, buildOptions.splitGroup);
   task.detail = info.detail ?? managed.commandLine;
   const group = createGroup(info.group);
   if (group) {

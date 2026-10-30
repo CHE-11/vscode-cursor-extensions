@@ -1,11 +1,17 @@
 import * as vscode from 'vscode';
 import { log } from './logger';
-import { TASK_TYPE, buildTask, type TaskManagerDefinition } from './taskFactory';
+import { TASK_TYPE, buildTask, type BuildOptions, type TaskManagerDefinition } from './taskFactory';
 import type { TaskRegistry } from './taskRegistry';
 import { normalizePath } from './scope';
-import type { ManagedTask } from '../types/tasks';
+import type { DependsOrder, ManagedTask } from '../types/tasks';
 
 const RESTART_TIMEOUT_MS = 5000;
+const START_TIMEOUT_MS = 5000;
+
+/** Wrapped so `await start()` resolves on start instead of flattening into completion. */
+interface Started {
+  done: Promise<void>;
+}
 
 export class TaskRunner implements vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
@@ -59,13 +65,17 @@ export class TaskRunner implements vscode.Disposable {
   }
 
   async run(managed: ManagedTask): Promise<void> {
+    let started: Started;
     try {
-      await this.runWithDependencies(managed, new Set(), false);
+      started = await this.start(managed, new Set(), {});
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`Task "${managed.label}" failed: ${message}`);
       void vscode.window.showWarningMessage(`Task Manager: ${message}`);
+      return;
     }
+    // Exit codes are already visible in each task's terminal, so failures are only logged.
+    started.done.catch((error) => log(`Task "${managed.label}" stopped: ${error instanceof Error ? error.message : String(error)}`));
   }
 
   async stop(managed: ManagedTask): Promise<void> {
@@ -116,52 +126,103 @@ export class TaskRunner implements vscode.Disposable {
     return dependencies;
   }
 
-  private async runWithDependencies(managed: ManagedTask, stack: Set<string>, wait: boolean): Promise<void> {
+  /**
+   * Starts a task (and its dependencies). Resolves once it has started, with a promise that
+   * settles when it finishes; background tasks count as finished as soon as they start.
+   */
+  private async start(managed: ManagedTask, stack: Set<string>, context: BuildOptions): Promise<Started> {
     if (stack.has(managed.id)) {
       throw new Error(`Circular dependsOn detected at "${managed.label}"`);
     }
     const nextStack = new Set(stack).add(managed.id);
     const dependencies = this.resolveDependencies(managed);
-
-    if (!managed.executable) {
-      this.runningCompounds.add(managed.id);
-      this.changeEmitter.fire();
-    }
-
-    try {
-      if (managed.dependsOrder === 'sequence') {
-        for (const dependency of dependencies) {
-          await this.runWithDependencies(dependency, nextStack, true);
-        }
-      } else {
-        await Promise.all(dependencies.map((dependency) => this.runWithDependencies(dependency, nextStack, true)));
-      }
-    } finally {
-      if (!managed.executable) {
-        this.runningCompounds.delete(managed.id);
-        this.changeEmitter.fire();
-      }
-    }
+    const childContext: BuildOptions = managed.splitGroup ? { splitGroup: managed.splitGroup } : context;
 
     if (!managed.executable) {
       if (dependencies.length === 0) {
         throw new Error(`Task "${managed.label}" has no command and its type "${managed.config.type}" is not supported`);
       }
-      return;
+      this.runningCompounds.add(managed.id);
+      this.changeEmitter.fire();
+      const clear = () => {
+        this.runningCompounds.delete(managed.id);
+        this.changeEmitter.fire();
+      };
+      try {
+        const { done } = await this.startAll(dependencies, managed.dependsOrder, nextStack, childContext);
+        return { done: done.finally(clear) };
+      } catch (error) {
+        clear();
+        throw error;
+      }
     }
 
-    const task = buildTask(managed);
+    if (dependencies.length > 0) {
+      await (await this.startAll(dependencies, managed.dependsOrder, nextStack, childContext)).done;
+    }
+
+    const task = buildTask(managed, context);
     if (!task) {
       throw new Error(`Could not build task "${managed.label}"`);
     }
     log(`Running "${managed.label}" (${managed.project.relativePath || managed.project.name}): ${managed.commandLine}`);
     const execution = await vscode.tasks.executeTask(task);
-    if (wait && !managed.isBackground) {
-      const exitCode = await this.waitForExit(execution);
-      if (exitCode !== undefined && exitCode !== 0) {
-        throw new Error(`Dependency "${managed.label}" exited with code ${exitCode}`);
-      }
+    const exited = this.waitForExit(execution);
+    await this.waitForStart(execution);
+    if (managed.isBackground) {
+      return { done: Promise.resolve() };
     }
+    return {
+      done: exited.then((exitCode) => {
+        if (exitCode !== undefined && exitCode !== 0) {
+          throw new Error(`"${managed.label}" exited with code ${exitCode}`);
+        }
+      }),
+    };
+  }
+
+  /**
+   * Parallel dependencies are still started one at a time: VS Code can only split a terminal
+   * into a group once the previous member's terminal exists. They then run concurrently.
+   */
+  private async startAll(dependencies: ManagedTask[], order: DependsOrder, stack: Set<string>, context: BuildOptions): Promise<Started> {
+    if (order === 'sequence') {
+      const [first, ...rest] = dependencies;
+      const firstStarted = await this.start(first, stack, context);
+      const done = (async () => {
+        await firstStarted.done;
+        for (const dependency of rest) {
+          await (await this.start(dependency, stack, context)).done;
+        }
+      })();
+      return { done };
+    }
+    const done: Promise<void>[] = [];
+    for (const dependency of dependencies) {
+      done.push((await this.start(dependency, stack, context)).done);
+    }
+    return { done: Promise.all(done).then(() => undefined) };
+  }
+
+  private waitForStart(execution: vscode.TaskExecution): Promise<void> {
+    const id = this.resolveExecution(execution)?.id;
+    const isSame = (other: vscode.TaskExecution) => other === execution || (id !== undefined && this.resolveExecution(other)?.id === id);
+    if (vscode.tasks.taskExecutions.some(isSame)) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, START_TIMEOUT_MS);
+      const listener = vscode.tasks.onDidStartTask((event) => {
+        if (isSame(event.execution)) {
+          done();
+        }
+      });
+      function done() {
+        clearTimeout(timer);
+        listener.dispose();
+        resolve();
+      }
+    });
   }
 
   private waitForExit(execution: vscode.TaskExecution): Promise<number | undefined> {

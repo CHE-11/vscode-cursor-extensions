@@ -31,6 +31,11 @@ export interface TaskOptionsConfig {
     args?: string[];
   };
   statusbar?: StatusBarOptions;
+  /**
+   * On a `dependsOn` task: run every dependency side by side in one split terminal.
+   * `true` uses a group named after this task; a string sets the group name explicitly.
+   */
+  split?: boolean | string;
 }
 
 export type ArgConfig = string | { value: string; quoting?: 'escape' | 'strong' | 'weak' };
@@ -115,6 +120,8 @@ export interface ManagedTask {
   isBackground: boolean;
   dependsOn: string[];
   dependsOrder: DependsOrder;
+  /** Terminal group passed down to dependencies when `options.split` is set. */
+  splitGroup?: string;
   statusbar: StatusBarOptions;
   hidden: boolean;
   commandLine: string;

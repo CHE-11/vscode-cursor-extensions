@@ -93,7 +93,9 @@ export class TaskItem extends vscode.TreeItem {
         `**${task.label}** · \`${task.project.relativePath || task.project.name}\``,
         task.statusbar.detail ?? '',
         task.commandLine ? `\`${task.commandLine.replace(/`/g, "'")}\`` : '',
-        task.dependsOn.length ? `Depends on (${task.dependsOrder}): ${task.dependsOn.join(', ')}` : '',
+        task.dependsOn.length
+          ? `Depends on (${task.dependsOrder}${task.splitGroup ? ', split terminal' : ''}): ${task.dependsOn.join(', ')}`
+          : '',
         running ? '$(sync~spin) Running' : '$(play) Use the play button to run',
       ]
         .filter(Boolean)

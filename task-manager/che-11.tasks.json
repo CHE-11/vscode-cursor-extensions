@@ -91,6 +91,14 @@
             "properties": {
                 "statusbar": {
                     "$ref": "#/definitions/statusbar"
+                },
+                "split": {
+                    "type": [
+                        "boolean",
+                        "string"
+                    ],
+                    "default": true,
+                    "markdownDescription": "Task Manager: on a task with `dependsOn`, run every dependency side by side in one split terminal.\n\n`true` uses a terminal group named after this task; a string sets the group name. Dependencies that set their own `presentation.group` keep it."
                 }
             }
         },
