@@ -1,0 +1,181 @@
+{
+  "name": "uri-quick-linker",
+  "displayName": "URI Quick Linker",
+  "description": "",
+  "version": "1.0.6",
+  "license": "MIT",
+  "icon": "/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/uri-quick-linker.git"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "uriQuickLinker",
+      "properties": {
+        "uriQuickLinker.useVSCodeInsiders": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use VS Code Insiders as the default URI scheme"
+        },
+        "uriQuickLinker.linkColor": {
+          "type": "string",
+          "default": "#3778ae",
+          "description": "The color of the URI link"
+        },
+        "uriQuickLinker.showLinkIcon": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the link icon next to the URI"
+        },
+        "uriQuickLinker.includeColumn": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the column number in the URI"
+        },
+        "uriQuickLinker.fileTypes": {
+          "type": "object",
+          "default": {
+            "txt": {
+              "prefix": "",
+              "suffix": ""
+            },
+            "md": {
+              "prefix": "",
+              "suffix": ""
+            },
+            "json": {
+              "prefix": "//",
+              "suffix": ""
+            },
+            "javascript": {
+              "prefix": "//",
+              "suffix": ""
+            },
+            "javascriptreact": {
+              "prefix": "//",
+              "suffix": ""
+            },
+            "typescript": {
+              "prefix": "//",
+              "suffix": ""
+            },
+            "typescriptreact": {
+              "prefix": "//",
+              "suffix": ""
+            },
+            "html": {
+              "prefix": "<!--",
+              "suffix": "-->"
+            },
+            "css": {
+              "prefix": "/*",
+              "suffix": "*/"
+            },
+            "scss": {
+              "prefix": "/*",
+              "suffix": "*/"
+            },
+            "less": {
+              "prefix": "/*",
+              "suffix": "*/"
+            },
+            "xml": {
+              "prefix": "<!--",
+              "suffix": "-->"
+            },
+            "yaml": {
+              "prefix": "#",
+              "suffix": ""
+            },
+            "yml": {
+              "prefix": "#",
+              "suffix": ""
+            },
+            "log": {
+              "prefix": "#",
+              "suffix": ""
+            },
+            "bat": {
+              "prefix": "rem",
+              "suffix": ""
+            },
+            "sh": {
+              "prefix": "#",
+              "suffix": ""
+            },
+            "ps1": {
+              "prefix": "#",
+              "suffix": ""
+            }
+          },
+          "description": "Allowed file types for URI links and their respective comment syntax"
+        }
+      }
+    },
+
+    "commands": [
+      {
+        "command": "extension.copyUriAndLineNumber",
+        "title": "Copy URI and Line Number"
+      },
+      {
+        "command": "extension.pasteUri",
+        "title": "Paste Commented URI"
+      },
+      {
+        "command": "extension.formatUriAsLink",
+        "title": "Format URI's"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorTextFocus",
+          "command": "extension.copyUriAndLineNumber",
+          "group": "uriLinker@1"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "extension.pasteUri",
+          "group": "uriLinker@2"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "extension.formatUriAsLink",
+          "group": "uriLinker@3"
+        }
+        
+      ]
+    }
+
+  },
+  "scripts": {
+    "vscode:prepublish": "yarn run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "yarn run compile && yarn run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.88.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.3",
+    "@vscode/test-cli": "^0.0.8",
+    "@vscode/test-electron": "^2.3.9"
+  }
+}

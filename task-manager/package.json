@@ -1,0 +1,284 @@
+{
+  "name": "task-manager",
+  "displayName": "Task Manager",
+  "description": "Folder-aware VS Code / Cursor tasks in the status bar and a dedicated sidebar panel.",
+  "version": "1.0.2",
+  "license": "MIT",
+  "publisher": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/task-manager.git"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "task",
+    "tasks",
+    "statusbar",
+    "monorepo"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Tasks are disabled in Restricted Mode."
+    }
+  },
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "tasks.json",
+        "url": "./che-11.tasks.json"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "taskManager",
+        "required": [
+          "label",
+          "project"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "The task label from tasks.json"
+          },
+          "project": {
+            "type": "string",
+            "description": "The folder that owns the .vscode/tasks.json file"
+          }
+        }
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Task Manager",
+      "properties": {
+        "taskManager.exclude": {
+          "type": "string",
+          "default": "**/{node_modules,out,dist,builds,.git}/**",
+          "description": "Glob pattern of folders to skip when searching for .vscode/tasks.json files"
+        },
+        "taskManager.scopeMode": {
+          "type": "string",
+          "enum": [
+            "activeFile",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Show tasks for the project that contains the active file (all tasks when outside every project)",
+            "Always show every task"
+          ],
+          "default": "activeFile",
+          "description": "Controls which tasks are shown in the status bar"
+        },
+        "taskManager.statusbar.limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null,
+          "description": "Maximum number of task buttons in the status bar. Extra tasks go into the overflow picker."
+        },
+        "taskManager.statusbar.select.label": {
+          "type": "string",
+          "default": "...",
+          "description": "Label of the overflow picker button"
+        },
+        "taskManager.statusbar.select.color": {
+          "type": "string",
+          "default": "",
+          "description": "Color of the overflow picker button"
+        },
+        "taskManager.statusbar.default.color": {
+          "type": "string",
+          "default": "",
+          "description": "Default color of task buttons"
+        },
+        "taskManager.statusbar.default.hide": {
+          "type": "boolean",
+          "default": false,
+          "description": "Hide tasks from the status bar unless options.statusbar.hide is false"
+        },
+        "taskManager.statusbar.showProjectName": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the project name in status bar tooltips"
+        },
+        "taskManager.statusbar.groupLabels": {
+          "type": "boolean",
+          "default": true,
+          "description": "When tasks from several tasks.json files are shown, put a divider with the folder name in front of each group"
+        },
+        "taskManager.statusbar.showScope": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a status bar item with the project whose tasks are currently shown"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "taskManager.runTask",
+        "title": "Task Manager: Run Task",
+        "icon": "$(play)"
+      },
+      {
+        "command": "taskManager.stopTask",
+        "title": "Task Manager: Stop Task",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "taskManager.restartTask",
+        "title": "Task Manager: Restart Task",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "taskManager.selectTask",
+        "title": "Task Manager: Select Task to Run",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "taskManager.openTasksFile",
+        "title": "Task Manager: Open tasks.json",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "taskManager.refresh",
+        "title": "Task Manager: Refresh Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "taskManager.showAll",
+        "title": "Task Manager: Show All Tasks",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "taskManager.showActiveScope",
+        "title": "Task Manager: Show Tasks for Active File",
+        "icon": "$(filter)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "taskManager.runTask",
+          "when": "false"
+        },
+        {
+          "command": "taskManager.openTasksFile",
+          "when": "false"
+        },
+        {
+          "command": "taskManager.stopTask",
+          "when": "false"
+        },
+        {
+          "command": "taskManager.restartTask",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "taskManager.showActiveScope",
+          "when": "view == taskManager.tasks && taskManager.treeScope != active",
+          "group": "navigation@1"
+        },
+        {
+          "command": "taskManager.showAll",
+          "when": "view == taskManager.tasks && taskManager.treeScope == active",
+          "group": "navigation@1"
+        },
+        {
+          "command": "taskManager.refresh",
+          "when": "view == taskManager.tasks",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "taskManager.runTask",
+          "when": "view == taskManager.tasks && viewItem == task",
+          "group": "inline@1"
+        },
+        {
+          "command": "taskManager.restartTask",
+          "when": "view == taskManager.tasks && viewItem == runningTask",
+          "group": "inline@1"
+        },
+        {
+          "command": "taskManager.stopTask",
+          "when": "view == taskManager.tasks && viewItem == runningTask",
+          "group": "inline@2"
+        },
+        {
+          "command": "taskManager.openTasksFile",
+          "when": "view == taskManager.tasks && viewItem == project",
+          "group": "inline@1"
+        },
+        {
+          "command": "taskManager.runTask",
+          "when": "view == taskManager.tasks && viewItem == task",
+          "group": "1_run@1"
+        },
+        {
+          "command": "taskManager.restartTask",
+          "when": "view == taskManager.tasks && viewItem == runningTask",
+          "group": "1_run@1"
+        },
+        {
+          "command": "taskManager.stopTask",
+          "when": "view == taskManager.tasks && viewItem == runningTask",
+          "group": "1_run@2"
+        },
+        {
+          "command": "taskManager.openTasksFile",
+          "when": "view == taskManager.tasks",
+          "group": "2_open@1"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "taskManager",
+          "title": "Task Manager",
+          "icon": "resources/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "taskManager": [
+        {
+          "id": "taskManager.tasks",
+          "name": "Tasks",
+          "icon": "resources/sidebar.svg",
+          "contextualTitle": "Task Manager"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "taskManager.tasks",
+        "contents": "No .vscode/tasks.json files were found in this workspace.\n[Refresh](command:taskManager.refresh)"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

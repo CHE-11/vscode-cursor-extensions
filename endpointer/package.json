@@ -1,0 +1,160 @@
+{
+  "name": "endpointer",
+  "displayName": "Endpointer",
+  "description": "",
+  "version": "1.0.36",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/endpointer.git"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "endpointer",
+      "properties": {
+        "endpointer.excludeFromIndex": {
+          "type": "string",
+          "default": "**/node_modules/**, **/dist/**, **/build/**, **/public/**, **/coverage/**, **/tmp/**, **/temp/**, **/vendor/**, **/assets/**, **/lib/**, **/static/**, **/out/**, **/output/**, **/logs/**, **/log/**, **/backup/**, **/backups/**, **/cache/**",
+          "description": "Glob patterns to exclude files from indexing"
+        },
+        "endpointer.includeInIndex": {
+          "type": "string",
+          "default": "**/*.{ts,js,jsx,tsx,py}",
+          "description": "Glob patterns to include files from indexing"
+        },
+        "endpointer.useVSCodeInsiders": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use VS Code Insiders as the default URI scheme"
+        },
+        "endpointer.endpointTemplateFormat": {
+          "type": "string",
+          "default": "",
+          "description": "Set the format for the endpoint template"
+        },
+        "endpointer.endpointRegex": {
+          "type": "string",
+          "default": "",
+          "description": "Set the format for the endpoint template"
+        },
+        "endpointer.frontendCallRegex": {
+          "type": "string",
+          "default": "https?://[^\\s]+",
+          "description": "The color of the URI link"
+        },
+        "endpointer.linkColor": {
+          "type": "string",
+          "default": "#2da5f2",
+          "description": "The color of the URI link"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "extension.enableForProject",
+        "title": "Endpointer: Enable for Project"
+      },
+      {
+        "command": "extension.reindexWorkspace",
+        "title": "Endpointer: Reindex Workspace",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "extension.pasteFrontendEndpointTemplate",
+        "title": "Endpointer: Paste Frontend Template"
+      },
+      {
+        "command": "extension.pasteBackendEndpointTemplate",
+        "title": "Endpointer: Paste Backend Template"
+      },
+      {
+        "command": "extension.openEndpoint",
+        "title": "Endpointer: Open Endpoint"
+      },
+      {
+        "command": "extension.formatEndpoints",
+        "title": "Endpointer: Format Endpoints"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorTextFocus",
+          "command": "extension.pasteFrontendEndpointTemplate",
+          "group": "endpointer@1"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "extension.pasteBackendEndpointTemplate",
+          "group": "endpointer@1"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "extension.reindexWorkspace",
+          "group": "endpointer@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "extension.reindexWorkspace",
+          "when": "view == endpointer.routes",
+          "group": "navigation"
+        },
+        {
+          "command": "extension.reindexWorkspace",
+          "when": "view == endpointer.frontendCalls",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "endpointer",
+          "title": "Endpointer",
+          "icon": "sidebar.png"
+        }
+      ]
+    },
+    "views": {
+      "endpointer": [
+        {
+          "id": "endpointer.routes",
+          "name": "Backend Routes"
+        },
+        {
+          "id": "endpointer.frontendCalls",
+          "name": "Frontend Calls"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.88.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.3",
+    "@vscode/test-cli": "^0.0.8",
+    "@vscode/test-electron": "^2.3.9"
+  }
+}
