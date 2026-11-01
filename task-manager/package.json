@@ -2,7 +2,7 @@
   "name": "task-manager",
   "displayName": "Task Manager",
   "description": "Folder-aware VS Code / Cursor tasks in the status bar and a dedicated sidebar panel.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "license": "MIT",
   "publisher": "che-11",
   "repository": {

@@ -188,10 +188,7 @@ export class StatusBarManager implements vscode.Disposable {
       const project = scope.activeProject.project;
       this.scopeItem.text = `$(folder-opened) ${project.name}`;
       this.scopeItem.tooltip = `Showing tasks from ${project.relativePath}/.vscode/tasks.json. Click to open the Task Manager panel.`;
-    } else {
-      this.scopeItem.text = '$(folder-library) All';
-      this.scopeItem.tooltip = `Showing tasks from ${scope.projects.length} project(s). Click to open the Task Manager panel.`;
-    }
+    } 
     this.scopeItem.show();
   }
 
