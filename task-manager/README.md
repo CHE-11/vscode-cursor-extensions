@@ -40,7 +40,7 @@ The **Task Manager** icon in the Activity Bar opens a tree of every project and 
 
 ### Startup
 
-The extension activates on `*`, the earliest activation event. The tasks.json files found in the previous session are loaded right away, then a full workspace scan replaces them. Status bar items use a low priority so they sit after the built-in left items (branch, sync, problems).
+The extension activates on `*`, the earliest activation event. The tasks.json files found in the previous session are loaded right away, then a full workspace scan replaces them. Status bar items sit just to the right of the error, warning, and info counts. Show Running Tasks stays pinned to that count.
 
 ## Supported tasks
 

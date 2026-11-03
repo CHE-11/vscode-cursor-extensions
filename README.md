@@ -13,3 +13,7 @@ Copy a file URI with its line number, paste it as a commented link, and click th
 ## [endpointer](./endpointer)
 
 Jump from a frontend API call to the matching backend route in a monorepo. It indexes routes and frontend calls, lists them in a sidebar, and lets you paste endpoint templates that link the two sides together.
+
+## [speed-start](./speed-start)
+
+Finds folders, large files, and startup extensions that slow Cursor down, then adds the ones you pick to `.cursorignore`, `.gitignore`, or the workspace search and watcher excludes.

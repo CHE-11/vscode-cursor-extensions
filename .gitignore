@@ -3,3 +3,14 @@ dist
 node_modules
 .vscode-test/
 
+endpointer/builds/*
+!endpointer/builds/endpointer-1.0.37.vsix
+
+speed-start/builds/*
+!speed-start/builds/speed-start-0.1.6.vsix
+
+task-manager/builds/*
+!task-manager/builds/task-manager-1.0.18.vsix
+
+uri-quick-linker/builds/*
+!uri-quick-linker/builds/uri-quick-linker-1.0.36.vsix

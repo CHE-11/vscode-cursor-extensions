@@ -1,0 +1,250 @@
+{
+  "name": "speed-start",
+  "displayName": "Speed Start",
+  "description": "Find folders, large files, and startup extensions that slow Cursor down, then ignore them in one click.",
+  "version": "0.1.6",
+  "license": "MIT",
+  "publisher": "che-11",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "performance",
+    "startup",
+    "cursorignore",
+    "gitignore",
+    "indexing"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Analyzing paths works. Writing ignore files and workspace settings is disabled in Restricted Mode."
+    }
+  },
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Speed Start",
+      "properties": {
+        "speedStart.directoryFileCount": {
+          "type": "number",
+          "default": 500,
+          "minimum": 1,
+          "description": "List a directory when it contains at least this many files."
+        },
+        "speedStart.directorySizeMB": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "List a directory when the files under it add up to at least this many megabytes."
+        },
+        "speedStart.fileSizeMB": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "description": "List a single file at or above this size."
+        },
+        "speedStart.maxEntries": {
+          "type": "number",
+          "default": 40,
+          "minimum": 1,
+          "description": "Maximum number of top-level paths to show in each group."
+        },
+        "speedStart.maxFilesVisited": {
+          "type": "number",
+          "default": 200000,
+          "minimum": 1000,
+          "description": "Stop the walk after this many directory entries."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "speedStart.analyze",
+        "title": "Speed Start: Analyze Workspace",
+        "icon": "$(search)"
+      },
+      {
+        "command": "speedStart.copyReport",
+        "title": "Speed Start: Copy Report",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "speedStart.addToCursorIgnore",
+        "title": "Speed Start: Add to .cursorignore",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "speedStart.addToGitIgnore",
+        "title": "Speed Start: Add to .gitignore",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "speedStart.excludeSearchWatcher",
+        "title": "Speed Start: Exclude from Search and Watcher",
+        "icon": "$(exclude)"
+      },
+      {
+        "command": "speedStart.copyPattern",
+        "title": "Speed Start: Copy Ignore Pattern",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "speedStart.reveal",
+        "title": "Speed Start: Reveal in Explorer",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "speedStart.showStartupPerformance",
+        "title": "Speed Start: Show Startup Performance",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "speedStart.showProcessExplorer",
+        "title": "Speed Start: Show Process Explorer",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "speedStart.showRunningExtensions",
+        "title": "Speed Start: Show Running Extensions",
+        "icon": "$(extensions)"
+      },
+      {
+        "command": "speedStart.startExtensionBisect",
+        "title": "Speed Start: Start Extension Bisect",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "speedStart.refreshExtensions",
+        "title": "Speed Start: Refresh Startup Extensions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "speedStart.openExtension",
+        "title": "Speed Start: Open Extension",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "speedStart.openExtension",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "speedStart.analyze",
+          "when": "view == speedStart.heavyPaths",
+          "group": "navigation@1"
+        },
+        {
+          "command": "speedStart.copyReport",
+          "when": "view == speedStart.heavyPaths",
+          "group": "navigation@2"
+        },
+        {
+          "command": "speedStart.refreshExtensions",
+          "when": "view == speedStart.startupExtensions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "speedStart.showStartupPerformance",
+          "when": "view == speedStart.startupExtensions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "speedStart.showProcessExplorer",
+          "when": "view == speedStart.startupExtensions",
+          "group": "navigation@3"
+        },
+        {
+          "command": "speedStart.showRunningExtensions",
+          "when": "view == speedStart.startupExtensions",
+          "group": "navigation@4"
+        },
+        {
+          "command": "speedStart.startExtensionBisect",
+          "when": "view == speedStart.startupExtensions",
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "speedStart.addToCursorIgnore",
+          "when": "view == speedStart.heavyPaths && viewItem =~ /heavyDirectory|heavyFile/",
+          "group": "1_ignore@1"
+        },
+        {
+          "command": "speedStart.addToGitIgnore",
+          "when": "view == speedStart.heavyPaths && viewItem =~ /heavyDirectory|heavyFile/",
+          "group": "1_ignore@2"
+        },
+        {
+          "command": "speedStart.excludeSearchWatcher",
+          "when": "view == speedStart.heavyPaths && viewItem =~ /heavyDirectory|heavyFile/",
+          "group": "1_ignore@3"
+        },
+        {
+          "command": "speedStart.copyPattern",
+          "when": "view == speedStart.heavyPaths && viewItem =~ /heavyDirectory|heavyFile/",
+          "group": "2_path@1"
+        },
+        {
+          "command": "speedStart.reveal",
+          "when": "view == speedStart.heavyPaths && viewItem =~ /heavyDirectory|heavyFile|ignoredPath/",
+          "group": "2_path@2"
+        },
+        {
+          "command": "speedStart.openExtension",
+          "when": "view == speedStart.startupExtensions && viewItem == startupExtension",
+          "group": "inline"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "speedStart",
+          "title": "Speed Start",
+          "icon": "resources/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "speedStart": [
+        {
+          "id": "speedStart.heavyPaths",
+          "name": "Heavy Paths",
+          "contextualTitle": "Speed Start"
+        },
+        {
+          "id": "speedStart.startupExtensions",
+          "name": "Startup Extensions"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "speedStart.heavyPaths",
+        "when": "speedStart.analyzed == false",
+        "contents": "Find folders and files that add cost on startup.\n[Analyze Workspace](command:speedStart.analyze)"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/ignoreMatch.test.js out/src/syncRoot.test.js out/src/startupExtensions.test.js out/src/scan.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

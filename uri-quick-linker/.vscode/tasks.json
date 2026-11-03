@@ -15,6 +15,22 @@
 				"kind": "build",
 				"isDefault": true
 			}
+		},
+		{
+			"label": "Package VSIX",
+			"type": "shell",
+			"command": "pnpm run package",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always"
+			},
+			"options": {
+				"cwd": "${workspaceFolder}",
+				"statusbar": {
+					"hide": false,
+					"color": "#a020f0"
+				}
+			}
 		}
 	]
 }

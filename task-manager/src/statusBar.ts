@@ -3,8 +3,15 @@ import { log } from './logger';
 import type { TaskScope } from './scope';
 import type { IconConfig, ManagedTask, ProjectInfo, StatusBarAppearance } from '../types/tasks';
 
-/** Left items are ordered by descending priority; a negative value places tasks after the built-in items. */
-const BASE_PRIORITY = -1000;
+/**
+ * Left items are ordered by descending priority.
+ * The error, warning, and info counts are one item at priority 50.
+ * Show Running Tasks is pinned to that item's right, so the first free
+ * slot on the right of Info is 49. Every task shares one priority so a
+ * long list stays together.
+ */
+const SCOPE_PRIORITY = 49;
+const TASK_PRIORITY = 48;
 
 export const RUN_TASK_COMMAND = 'taskManager.runTask';
 export const SELECT_TASK_COMMAND = 'taskManager.selectTask';
@@ -15,6 +22,12 @@ export interface TaskPickItem extends vscode.QuickPickItem {
   taskId?: string;
 }
 
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
 interface RenderedItem {
   text: string;
   tooltip: vscode.MarkdownString | string | undefined;
@@ -22,6 +35,90 @@ interface RenderedItem {
   backgroundColor: vscode.ThemeColor | undefined;
   command: vscode.Command | string;
   name: string;
+  /** Ease the label between a dim and bright color while this task is running. */
+  pulse?: boolean;
+  /** Hex color to pulse around. Unset uses the status bar foreground. */
+  pulseRgb?: Rgb;
+}
+
+const PULSE_INTERVAL_MS = 50;
+const PULSE_PERIOD_MS = 1400;
+
+function parseHex(color: string | undefined): Rgb | undefined {
+  if (!color) {
+    return undefined;
+  }
+  const match = /^#([\da-f]{3,8})$/i.exec(color.trim());
+  if (!match) {
+    return undefined;
+  }
+  let hex = match[1];
+  if (hex.length === 3 || hex.length === 4) {
+    hex = hex
+      .slice(0, 3)
+      .split('')
+      .map((channel) => channel + channel)
+      .join('');
+  }
+  if (hex.length < 6) {
+    return undefined;
+  }
+  const value = Number.parseInt(hex.slice(0, 6), 16);
+  return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+}
+
+function formatChannel(channel: number): string {
+  return Math.round(Math.min(255, Math.max(0, channel)))
+    .toString(16)
+    .padStart(2, '0');
+}
+
+function isLightTheme(): boolean {
+  const kind = vscode.window.activeColorTheme.kind;
+  return kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight;
+}
+
+/** 0 is the dim end of the pulse, 1 is the bright end. */
+function pulseAmount(elapsed: number): number {
+  const phase = (elapsed % PULSE_PERIOD_MS) / PULSE_PERIOD_MS;
+  return (1 - Math.cos(phase * Math.PI * 2)) / 2;
+}
+
+function mixChannel(from: number, to: number, amount: number): number {
+  return from + (to - from) * amount;
+}
+
+function pulseEnds(base: Rgb | undefined, light: boolean): [Rgb, Rgb] {
+  if (!base) {
+    return light
+      ? [
+          { r: 168, g: 168, b: 168 },
+          { r: 28, g: 28, b: 28 },
+        ]
+      : [
+          { r: 92, g: 92, b: 92 },
+          { r: 255, g: 255, b: 255 },
+        ];
+  }
+  const dim = light ? 0.72 : 0.35;
+  const bright = light ? 0.15 : 0.62;
+  return [
+    {
+      r: mixChannel(base.r, light ? 255 : 0, dim),
+      g: mixChannel(base.g, light ? 255 : 0, dim),
+      b: mixChannel(base.b, light ? 255 : 0, dim),
+    },
+    {
+      r: mixChannel(base.r, light ? 0 : 255, bright),
+      g: mixChannel(base.g, light ? 0 : 255, bright),
+      b: mixChannel(base.b, light ? 0 : 255, bright),
+    },
+  ];
+}
+
+function colorAt(base: Rgb | undefined, amount: number, light: boolean): string {
+  const [dim, bright] = pulseEnds(base, light);
+  return `#${formatChannel(mixChannel(dim.r, bright.r, amount))}${formatChannel(mixChannel(dim.g, bright.g, amount))}${formatChannel(mixChannel(dim.b, bright.b, amount))}`;
 }
 
 function convertColor(color: string | undefined): string | vscode.ThemeColor | undefined {
@@ -57,10 +154,10 @@ function pickAppearance(managed: ManagedTask, running: boolean): Required<Pick<S
   };
 }
 
-function formatText(label: string, icon: IconConfig | undefined, running: boolean, hasRunningIcon: boolean): string {
-  if (running && !hasRunningIcon) {
-    return `$(sync~spin) ${label}`;
-  }
+function formatText(label: string, icon: IconConfig | undefined, _running: boolean, _hasRunningIcon: boolean): string {
+  // if (running && !hasRunningIcon) {
+  //   return `$(sync~spin) ${label}`;
+  // }
   return icon?.id ? `$(${icon.id}) ${label}` : label;
 }
 
@@ -100,8 +197,11 @@ function createGroupLabel(project: ProjectInfo): RenderedItem {
 
 export class StatusBarManager implements vscode.Disposable {
   private items: vscode.StatusBarItem[] = [];
+  private rendered: RenderedItem[] = [];
   private scopeItem: vscode.StatusBarItem | undefined;
   private overflow: TaskPickItem[] = [];
+  private pulseTimer: ReturnType<typeof setInterval> | undefined;
+  private pulseStartedAt = 0;
 
   get overflowItems(): readonly TaskPickItem[] {
     return this.overflow;
@@ -136,6 +236,7 @@ export class StatusBarManager implements vscode.Disposable {
         }
         const appearance = pickAppearance(managed, running);
         taskCount++;
+        const pulseRgb = parseHex(appearance.color);
         items.push({
           text: formatText(appearance.label, appearance.icon, running, Boolean(managed.statusbar.running?.icon)),
           tooltip: createTooltip(managed, running, showProjectName),
@@ -143,6 +244,8 @@ export class StatusBarManager implements vscode.Disposable {
           backgroundColor: appearance.backgroundColor ? new vscode.ThemeColor(appearance.backgroundColor) : undefined,
           command: { title: 'Run Task', command: RUN_TASK_COMMAND, arguments: [managed.id] },
           name: `Task: ${managed.label}`,
+          pulse: running && (appearance.color === undefined || pulseRgb !== undefined),
+          pulseRgb,
         });
       }
     }
@@ -180,7 +283,7 @@ export class StatusBarManager implements vscode.Disposable {
       return;
     }
     if (!this.scopeItem) {
-      this.scopeItem = vscode.window.createStatusBarItem('taskManager.scope', vscode.StatusBarAlignment.Left, BASE_PRIORITY + 1);
+      this.scopeItem = vscode.window.createStatusBarItem('taskManager.scope', vscode.StatusBarAlignment.Left, SCOPE_PRIORITY);
       this.scopeItem.name = 'Task Manager: Scope';
       this.scopeItem.command = FOCUS_VIEW_COMMAND;
     }
@@ -195,12 +298,13 @@ export class StatusBarManager implements vscode.Disposable {
   private sync(rendered: RenderedItem[]): void {
     while (this.items.length < rendered.length) {
       const index = this.items.length;
-      const item = vscode.window.createStatusBarItem(`taskManager.task.${index}`, vscode.StatusBarAlignment.Left, BASE_PRIORITY - index);
+      const item = vscode.window.createStatusBarItem(`taskManager.task.${index}`, vscode.StatusBarAlignment.Left, TASK_PRIORITY);
       this.items.push(item);
     }
     while (this.items.length > rendered.length) {
       this.items.pop()?.dispose();
     }
+    this.rendered = rendered;
     rendered.forEach((source, index) => {
       const item = this.items[index];
       item.name = source.name;
@@ -211,9 +315,50 @@ export class StatusBarManager implements vscode.Disposable {
       item.command = source.command;
       item.show();
     });
+    this.syncPulseTimer();
+    if (this.pulseTimer) {
+      this.applyPulse();
+    }
+  }
+
+  private syncPulseTimer(): void {
+    const pulsing = this.rendered.some((item) => item.pulse);
+    if (!pulsing) {
+      this.stopPulse();
+      return;
+    }
+    if (this.pulseTimer) {
+      return;
+    }
+    this.pulseStartedAt = Date.now();
+    this.pulseTimer = setInterval(() => this.applyPulse(), PULSE_INTERVAL_MS);
+  }
+
+  private applyPulse(): void {
+    const amount = pulseAmount(Date.now() - this.pulseStartedAt);
+    const light = isLightTheme();
+    this.rendered.forEach((source, index) => {
+      if (!source.pulse) {
+        return;
+      }
+      const item = this.items[index];
+      if (item) {
+        item.color = colorAt(source.pulseRgb, amount, light);
+      }
+    });
+  }
+
+  private stopPulse(): void {
+    if (!this.pulseTimer) {
+      return;
+    }
+    clearInterval(this.pulseTimer);
+    this.pulseTimer = undefined;
   }
 
   dispose(): void {
+    this.stopPulse();
+    this.rendered = [];
     this.items.forEach((item) => item.dispose());
     this.items = [];
     this.scopeItem?.dispose();
