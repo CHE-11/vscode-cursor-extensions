@@ -25,7 +25,7 @@ If the workspace sits under MEGA, Dropbox, OneDrive, Google Drive, or iCloud, th
 
 ## Startup extensions
 
-The second view lists extensions that activate on `*`, `onStartupFinished`, or `workspaceContains`. Third-party extensions are separate from built-in `vscode.*` and `anysphere.*` extensions. Title-bar actions open Startup Performance, Process Explorer, Running Extensions, and Extension Bisect.
+The second view lists extensions that activate on `*`, `onStartupFinished`, or `workspaceContains`. Third-party extensions are separate from built-in `vscode.*` and `anysphere.*` extensions. Startup Performance opens an extension-host timeline in a plain text editor. Process Explorer, Running Extensions, and Extension Bisect open the built-in tools.
 
 ## Settings
 

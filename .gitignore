@@ -7,7 +7,7 @@ endpointer/builds/*
 !endpointer/builds/endpointer-1.0.37.vsix
 
 speed-start/builds/*
-!speed-start/builds/speed-start-0.1.6.vsix
+!speed-start/builds/speed-start-0.1.7.vsix
 
 task-manager/builds/*
 !task-manager/builds/task-manager-1.0.18.vsix
