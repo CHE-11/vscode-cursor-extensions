@@ -1,0 +1,101 @@
+{
+  "name": "fold-level",
+  "displayName": "Fold Level",
+  "description": "Fold the active editor to a chosen level from the status bar.",
+  "version": "1.0.0",
+  "publisher": "che-11",
+  "author": "che-11",
+  "icon": "assets/fold-level.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "fold",
+    "folding",
+    "status bar",
+    "statusbar"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "fold-level.unfoldAll",
+        "title": "Unfold All",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel1",
+        "title": "Fold Level 1",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel2",
+        "title": "Fold Level 2",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel3",
+        "title": "Fold Level 3",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel4",
+        "title": "Fold Level 4",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel5",
+        "title": "Fold Level 5",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel6",
+        "title": "Fold Level 6",
+        "category": "Fold Level"
+      },
+      {
+        "command": "fold-level.foldLevel7",
+        "title": "Fold Level 7",
+        "category": "Fold Level"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Fold Level",
+      "properties": {
+        "foldLevel.level": {
+          "type": "array",
+          "default": ["∞", "1", "2", "3", "4", "5", "6", "7"],
+          "description": "Fold level buttons to show on the status bar. An empty list shows every level.",
+          "items": {
+            "type": "string",
+            "enum": ["∞", "1", "2", "3", "4", "5", "6", "7"]
+          },
+          "uniqueItems": true
+        },
+        "foldLevel.foldSubLevels": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also fold every deeper level when a level is chosen."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/fold.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

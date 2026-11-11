@@ -17,3 +17,7 @@ Jump from a frontend API call to the matching backend route in a monorepo. It in
 ## [speed-start](./speed-start)
 
 Finds folders, large files, and startup extensions that slow Cursor down, then adds the ones you pick to `.cursorignore`, `.gitignore`, or the workspace search and watcher excludes.
+
+## [fold-level](./fold-level)
+
+Puts fold-level buttons on the status bar so the active editor can be collapsed to a chosen depth. Based on [denjay/fold-level](https://github.com/denjay/fold-level).
