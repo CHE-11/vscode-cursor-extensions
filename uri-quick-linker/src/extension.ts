@@ -62,8 +62,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // get the config for the link color and icon
   const config = vscode.workspace.getConfiguration('uriQuickLinker');
-  const linkColor = config.get('linkColor');
-  const showLinkIcon = config.get('showLinkIcon');
+  const linkColor = config.get<string>('linkColor');
+  const showLinkIcon = config.get<boolean>('showLinkIcon');
 
   // set the link color
   const linkDecorator = vscode.window.createTextEditorDecorationType({
@@ -170,8 +170,8 @@ function copyCurrentFilePathWithCurrentLineNumber(markdown: boolean = false, inc
 	const lineNumber = editor.selection.active.line + 1;
 	const columnNumber = editor.selection.active.character + 1;
 	const config = vscode.workspace.getConfiguration('uriQuickLinker');
-	const includeColumn = config.get('includeColumn');
-	const useVSCodeInsiders = config.get('useVSCodeInsiders');
+	const includeColumn = config.get<boolean>('includeColumn');
+	const useVSCodeInsiders = config.get<boolean>('useVSCodeInsiders');
 	const protocol = useVSCodeInsiders ? 'vscode-insiders' : 'vscode';
 
 	const url = `${protocol}://file${path}:${lineNumber}${includeColumn ? `:${columnNumber}` : ''}`;

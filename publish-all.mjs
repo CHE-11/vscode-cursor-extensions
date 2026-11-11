@@ -70,7 +70,7 @@ function findExtensions(root) {
       if (!existsSync(packagePath)) return null;
       const pkg = JSON.parse(readFileSync(packagePath, 'utf8'));
       if (!pkg.engines?.vscode || !pkg.name) return null;
-      const build = latestVsix(extensionDir, pkg.name);
+      const build = latestVsix(join(root, '_latest_builds_'), pkg.name);
       if (!build) return null;
       return {
         name: pkg.name,
@@ -85,8 +85,7 @@ function findExtensions(root) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function latestVsix(extensionDir, name) {
-  const buildsDir = join(extensionDir, 'builds');
+function latestVsix(buildsDir, name) {
   if (!existsSync(buildsDir)) return null;
   const prefix = `${name}-`;
   const builds = readdirSync(buildsDir)

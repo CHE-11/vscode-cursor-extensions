@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+src/**
+builds/**
+node_modules/**
+.gitignore
+package.js
+pnpm-lock.yaml
+**/tsconfig.json
+**/*.map
+**/*.ts
+**/*.test.js
+images/how-to-use.png
+images/menu.png
+images/screenshot.png
+images/zoomhex.1024.png
+images/zoomhex.ico

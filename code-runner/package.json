@@ -1,0 +1,441 @@
+{
+  "name": "ce-code-runner",
+  "displayName": "Code Runner",
+  "description": "Run the current file from the editor title, and edit the program for each file type in the sidebar.",
+  "version": "0.1.7",
+  "license": "MIT",
+  "publisher": "che-11",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "run",
+    "executor",
+    "python",
+    "javascript",
+    "code-runner"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Running code is disabled in Restricted Mode."
+    }
+  },
+  "activationEvents": [
+    "onView:codeRunner.programs",
+    "onCommand:codeRunner.run",
+    "onCommand:codeRunner.stop",
+    "onCommand:codeRunner.runByLanguage",
+    "onCommand:codeRunner.runCustomCommand",
+    "onCommand:codeRunner.addProgram"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeRunner.run",
+        "title": "Code Runner: Run Code",
+        "icon": "$(play)"
+      },
+      {
+        "command": "codeRunner.stop",
+        "title": "Code Runner: Stop Code Run",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "codeRunner.runByLanguage",
+        "title": "Code Runner: Run By Language",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "codeRunner.runCustomCommand",
+        "title": "Code Runner: Run Custom Command",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "codeRunner.addProgram",
+        "title": "Code Runner: Add Program",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codeRunner.editProgram",
+        "title": "Code Runner: Edit Program",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "codeRunner.resetProgram",
+        "title": "Code Runner: Reset Program",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "codeRunner.deleteProgram",
+        "title": "Code Runner: Delete Program",
+        "icon": "$(trash)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "codeRunner.run",
+        "key": "ctrl+alt+n",
+        "mac": "ctrl+alt+n"
+      },
+      {
+        "command": "codeRunner.stop",
+        "key": "ctrl+alt+m",
+        "mac": "ctrl+alt+m"
+      },
+      {
+        "command": "codeRunner.runByLanguage",
+        "key": "ctrl+alt+j",
+        "mac": "ctrl+alt+j"
+      },
+      {
+        "command": "codeRunner.runCustomCommand",
+        "key": "ctrl+alt+k",
+        "mac": "ctrl+alt+k"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "codeRunner.run",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "codeRunner.stop",
+          "when": "codeRunner.running",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "codeRunner.run",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "codeRunner.run",
+          "when": "!explorerResourceIsFolder",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "codeRunner.run",
+          "when": "view == codeRunner.programs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codeRunner.stop",
+          "when": "view == codeRunner.programs && codeRunner.running",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codeRunner.addProgram",
+          "when": "view == codeRunner.programs",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codeRunner.editProgram",
+          "when": "view == codeRunner.programs && (viewItem == program || viewItem == programOverridden)",
+          "group": "inline@1"
+        },
+        {
+          "command": "codeRunner.resetProgram",
+          "when": "view == codeRunner.programs && viewItem == programOverridden",
+          "group": "inline@2"
+        },
+        {
+          "command": "codeRunner.editProgram",
+          "when": "view == codeRunner.programs && (viewItem == program || viewItem == programOverridden)",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "codeRunner.resetProgram",
+          "when": "view == codeRunner.programs && viewItem == programOverridden",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "codeRunner.deleteProgram",
+          "when": "view == codeRunner.programs && (viewItem == program || viewItem == programOverridden)",
+          "group": "2_delete@1"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codeRunner",
+          "title": "Code Runner",
+          "icon": "resources/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "codeRunner": [
+        {
+          "id": "codeRunner.programs",
+          "name": "Programs",
+          "contextualTitle": "Code Runner"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Code Runner",
+      "properties": {
+        "codeRunner.executorMap": {
+          "type": "object",
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Command for each language id. If the command has no placeholder, the quoted file path is appended. Placeholders: `$workspaceRoot`, `$dir`, `$dirWithoutTrailingSlash`, `$fullFileName`, `$fileName`, `$fileNameWithoutExt`, `$driveLetter`, `$pythonPath`.",
+          "default": {
+            "javascript": "node",
+            "java": "cd $dir && javac $fileName && java $fileNameWithoutExt",
+            "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "zig": "zig run",
+            "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "objective-c": "cd $dir && gcc -framework Cocoa $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "php": "php",
+            "python": "python -u",
+            "perl": "perl",
+            "perl6": "perl6",
+            "ruby": "ruby",
+            "go": "go run",
+            "lua": "lua",
+            "groovy": "groovy",
+            "powershell": "powershell -ExecutionPolicy ByPass -File",
+            "bat": "cmd /c",
+            "shellscript": "bash",
+            "fsharp": "fsi",
+            "csharp": "scriptcs",
+            "vbscript": "cscript //Nologo",
+            "typescript": "ts-node",
+            "coffeescript": "coffee",
+            "scala": "scala",
+            "swift": "swift",
+            "julia": "julia",
+            "crystal": "crystal",
+            "ocaml": "ocaml",
+            "r": "Rscript",
+            "applescript": "osascript",
+            "clojure": "lein exec",
+            "haxe": "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+            "rust": "cd $dir && rustc $fileName && $dir$fileNameWithoutExt",
+            "racket": "racket",
+            "scheme": "csi -script",
+            "ahk": "autohotkey",
+            "autoit": "autoit3",
+            "dart": "dart",
+            "pascal": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+            "d": "cd $dir && dmd $fileName && $dir$fileNameWithoutExt",
+            "haskell": "runghc",
+            "nim": "nim compile --verbosity:0 --hints:off --run",
+            "lisp": "sbcl --script",
+            "kit": "kitc --run",
+            "v": "v run",
+            "sass": "sass --style expanded",
+            "scss": "scss --style expanded",
+            "less": "cd $dir && lessc $fileName $fileNameWithoutExt.css",
+            "FortranFreeForm": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "fortran-modern": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "fortran_fixed-form": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "fortran": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            "sml": "cd $dir && sml $fileName",
+            "mojo": "mojo run",
+            "erlang": "escript",
+            "spwn": "spwn build",
+            "pkl": "cd $dir && pkl eval -f yaml $fileName -o $fileNameWithoutExt.yaml",
+            "gleam": "gleam run -m $fileNameWithoutExt"
+          }
+        },
+        "codeRunner.executorMapByFileExtension": {
+          "type": "object",
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Command for each file extension, including the dot. Used when the language id has no program.",
+          "default": {
+            ".vb": "cd $dir && vbc /nologo $fileName && $dir$fileNameWithoutExt",
+            ".vbs": "cscript //Nologo",
+            ".scala": "scala",
+            ".jl": "julia",
+            ".cr": "crystal",
+            ".ml": "ocaml",
+            ".zig": "zig run",
+            ".exs": "elixir",
+            ".hx": "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+            ".rkt": "racket",
+            ".scm": "csi -script",
+            ".ahk": "autohotkey",
+            ".au3": "autoit3",
+            ".kt": "cd $dir && kotlinc $fileName -include-runtime -d $fileNameWithoutExt.jar && java -jar $fileNameWithoutExt.jar",
+            ".kts": "kotlinc -script",
+            ".dart": "dart",
+            ".pas": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+            ".pp": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+            ".d": "cd $dir && dmd $fileName && $dir$fileNameWithoutExt",
+            ".hs": "runhaskell",
+            ".nim": "nim compile --verbosity:0 --hints:off --run",
+            ".csproj": "dotnet run --project",
+            ".fsproj": "dotnet run --project",
+            ".lisp": "sbcl --script",
+            ".kit": "kitc --run",
+            ".v": "v run",
+            ".vsh": "v run",
+            ".sass": "sass --style expanded",
+            ".cu": "cd $dir && nvcc $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+            ".ring": "ring",
+            ".sml": "cd $dir && sml $fileName",
+            ".mojo": "mojo run",
+            ".erl": "escript",
+            ".spwn": "spwn build",
+            ".pkl": "cd $dir && pkl eval -f yaml $fileName -o $fileNameWithoutExt.yaml",
+            ".gleam": "gleam run -m $fileNameWithoutExt"
+          }
+        },
+        "codeRunner.executorMapByGlob": {
+          "type": "object",
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Command for a filename glob. The first matching pattern wins. `*` and `?` match within the file name.",
+          "default": {
+            "pom.xml": "cd $dir && mvn clean package"
+          }
+        },
+        "codeRunner.customCommand": {
+          "type": "string",
+          "scope": "resource",
+          "default": "echo Hello",
+          "markdownDescription": "Command for **Code Runner: Run Custom Command**. Placeholders are filled from the active file. The file path is not appended."
+        },
+        "codeRunner.languageIdToFileExtensionMap": {
+          "type": "object",
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Extension used when a selection or untitled editor is written to a temporary file.",
+          "default": {
+            "bat": ".bat",
+            "c": ".c",
+            "cpp": ".cpp",
+            "csharp": ".cs",
+            "dart": ".dart",
+            "go": ".go",
+            "java": ".java",
+            "javascript": ".js",
+            "lua": ".lua",
+            "perl": ".pl",
+            "php": ".php",
+            "powershell": ".ps1",
+            "python": ".py",
+            "r": ".r",
+            "ruby": ".rb",
+            "rust": ".rs",
+            "shellscript": ".sh",
+            "typescript": ".ts"
+          }
+        },
+        "codeRunner.defaultLanguage": {
+          "type": "string",
+          "scope": "resource",
+          "default": "",
+          "description": "Language id to run when the file matches no glob, shebang, language, or extension."
+        },
+        "codeRunner.cwd": {
+          "type": "string",
+          "scope": "resource",
+          "default": "",
+          "description": "Working directory. A relative path is resolved from the workspace folder. Leave empty to use the workspace folder, or the file directory when that setting is on."
+        },
+        "codeRunner.fileDirectoryAsCwd": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": false,
+          "description": "Use the directory of the file being run as the working directory."
+        },
+        "codeRunner.clearPreviousOutput": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": false,
+          "description": "Clear the previous terminal or output channel before each run."
+        },
+        "codeRunner.saveAllFilesBeforeRun": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": false,
+          "description": "Save every dirty file before running a saved file."
+        },
+        "codeRunner.saveFileBeforeRun": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": true,
+          "description": "Save the current file before running it. Selections and untitled editors run from a temporary file instead."
+        },
+        "codeRunner.showExecutionMessage": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": true,
+          "description": "Show [Running] and [Done] lines in the output channel."
+        },
+        "codeRunner.runInTerminal": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": true,
+          "description": "Run in the integrated terminal. Turn off to send stdout and stderr to the Code Runner output channel."
+        },
+        "codeRunner.preserveFocus": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": true,
+          "description": "Keep focus in the editor after starting a run."
+        },
+        "codeRunner.ignoreSelection": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": false,
+          "description": "Run the whole file even when the editor has a selection."
+        },
+        "codeRunner.temporaryFileName": {
+          "type": "string",
+          "scope": "resource",
+          "default": "tempCodeRunnerFile",
+          "description": "Base name of the temporary file used for a selection or an untitled editor. Leave empty for a random name."
+        },
+        "codeRunner.respectShebang": {
+          "type": "boolean",
+          "scope": "resource",
+          "default": true,
+          "description": "Run a file with its shebang when no filename glob matches. Lines that start with #![ are left alone."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/executor.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

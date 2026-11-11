@@ -1,0 +1,22 @@
+{
+  "taskbar-zoom.title": "Taskbar Zoom",
+  "taskbar-zoom.selectZoom.title": "Select Zoom",
+  "taskbar-zoom.resetZoom.title": "Reset Zoom",
+  "taskbar-zoom.zoomIn.title": "Zoom In",
+  "taskbar-zoom.zoomOut.title": "Zoom Out",
+  "taskbarZoom.defaultZoom.description": "Default zoom percentage. Decimal values are allowed.",
+  "taskbarZoom.zoomUnit.description": "Amount applied by Zoom In and Zoom Out. Decimal values are allowed.",
+  "taskbarZoom.zoomUnitType.description": "How the zoom unit is applied.",
+  "taskbarZoom.zoomUnitType.multiplicative.description": "Multiply the current zoom by the unit.",
+  "taskbarZoom.zoomUnitType.additive.description": "Add the unit to the current zoom percentage.",
+  "taskbarZoom.preview.description": "Apply a zoom while it is highlighted, before it is confirmed.",
+  "taskbarZoom.zoomPreset.description": "Percentages listed in Select Zoom. Decimal values are allowed.",
+  "taskbarZoom.zoomInLabel.description": "Status bar label for Zoom In. Codicons such as $(add) are allowed.",
+  "taskbarZoom.zoomOutLabel.description": "Status bar label for Zoom Out. Codicons such as $(remove) are allowed.",
+  "taskbarZoom.fontZoomResetLabel.description": "Status bar label for Editor Font Zoom Reset.",
+  "taskbarZoom.uiDisplayOrder.description": "Status bar order. @ is font zoom reset, % is the zoom percentage, + is zoom in, and - is zoom out.",
+  "taskbarZoom.configurationTarget.description": "Where zoom changes are saved.",
+  "taskbarZoom.configurationTarget.auto.description": "Write the workspace zoom when one is set. Otherwise write the user zoom.",
+  "taskbarZoom.configurationTarget.global.description": "Always write the user zoom. A workspace zoom is cleared first.",
+  "taskbarZoom.configurationTarget.workspace.description": "Write the workspace zoom. With no folder open, write the user zoom."
+}

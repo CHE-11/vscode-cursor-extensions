@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Package All",
+      "type": "shell",
+      "command": "node package-all.mjs",
+      "icon": {
+        "id": "package",
+        "color": "terminal.ansiCyan"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "statusbar": {
+          "hide": false,
+          "color": "#e28e9b"
+        }
+      },
+
+    },
+    {
+      "label": "Publish All",
+      "type": "shell",
+      "command": "node publish-all.mjs",
+      "icon": {
+        "id": "cloud-upload",
+        "color": "terminal.ansiGreen"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "statusbar": {
+          "hide": false,
+          "color": "#32ec4b"
+        }
+      },
+    }
+  ]
+}

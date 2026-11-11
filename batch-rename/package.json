@@ -1,0 +1,74 @@
+{
+  "name": "ce-batch-rename",
+  "displayName": "Batch Rename",
+  "description": "Rename several Explorer files at once from a text editor.",
+  "version": "1.0.7",
+  "license": "MIT",
+  "publisher": "che-11",
+  "author": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "batch-rename"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "rename",
+    "batch",
+    "explorer"
+  ],
+  "activationEvents": [],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "batch-rename.rename",
+        "title": "Batch Rename",
+        "category": "Batch Rename"
+      },
+      {
+        "command": "batch-rename.apply",
+        "title": "Apply Batch Rename"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "batch-rename.apply",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "editorTextFocus && resourceScheme == batch-rename"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "batch-rename.apply",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "batch-rename.rename",
+          "when": "explorerResourceIsFolder == false",
+          "group": "7_modification"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "name": "ce-taskbar-zoom",
+  "displayName": "Taskbar Zoom",
+  "description": "Zoom the workbench from the status bar.",
+  "version": "1.0.11",
+  "license": "BSL-1.0",
+  "publisher": "che-11",
+  "author": "che-11",
+  "icon": "images/zoomhex.128.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "zoom",
+    "status bar",
+    "statusbar"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "taskbar-zoom.selectZoom",
+        "title": "%taskbar-zoom.selectZoom.title%",
+        "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.resetZoom",
+        "title": "%taskbar-zoom.resetZoom.title%",
+        "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.zoomIn",
+        "title": "%taskbar-zoom.zoomIn.title%",
+        "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.zoomOut",
+        "title": "%taskbar-zoom.zoomOut.title%",
+        "category": "%taskbar-zoom.title%"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Taskbar Zoom",
+      "properties": {
+        "taskbarZoom.defaultZoom": {
+          "type": "number",
+          "default": 100,
+          "description": "%taskbarZoom.defaultZoom.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.zoomUnit": {
+          "type": "number",
+          "default": 10,
+          "description": "%taskbarZoom.zoomUnit.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.zoomUnitType": {
+          "type": "string",
+          "enum": [
+            "multiplicative",
+            "additive"
+          ],
+          "default": "multiplicative",
+          "description": "%taskbarZoom.zoomUnitType.description%",
+          "enumDescriptions": [
+            "%taskbarZoom.zoomUnitType.multiplicative.description%",
+            "%taskbarZoom.zoomUnitType.additive.description%"
+          ],
+          "scope": "window"
+        },
+        "taskbarZoom.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "%taskbarZoom.preview.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.zoomPreset": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "default": [
+            300,
+            250,
+            200,
+            175,
+            150,
+            140,
+            130,
+            120,
+            110,
+            105,
+            100,
+            95,
+            90,
+            80,
+            75,
+            70,
+            60,
+            50
+          ],
+          "description": "%taskbarZoom.zoomPreset.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.zoomInLabel": {
+          "type": "string",
+          "default": "+",
+          "description": "%taskbarZoom.zoomInLabel.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.zoomOutLabel": {
+          "type": "string",
+          "default": "-",
+          "description": "%taskbarZoom.zoomOutLabel.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.fontZoomResetLabel": {
+          "type": "string",
+          "default": "$(text-size)",
+          "description": "%taskbarZoom.fontZoomResetLabel.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.uiDisplayOrder": {
+          "type": "string",
+          "enum": [
+            "",
+            "@",
+            "%",
+            "@%",
+            "%@",
+            "+-",
+            "-+",
+            "@+-",
+            "@-+",
+            "+-@",
+            "-+@",
+            "+%-",
+            "+-%",
+            "%+-",
+            "%-+",
+            "-%+",
+            "-+%",
+            "@+%-",
+            "@+-%",
+            "@%+-",
+            "@%-+",
+            "@-%+",
+            "@-+%",
+            "+%-@",
+            "+-%@",
+            "%+-@",
+            "%-+@",
+            "-%+@",
+            "-+%@"
+          ],
+          "default": "@+%-",
+          "description": "%taskbarZoom.uiDisplayOrder.description%",
+          "scope": "window"
+        },
+        "taskbarZoom.configurationTarget": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "global",
+            "workspace"
+          ],
+          "description": "%taskbarZoom.configurationTarget.description%",
+          "enumDescriptions": [
+            "%taskbarZoom.configurationTarget.auto.description%",
+            "%taskbarZoom.configurationTarget.global.description%",
+            "%taskbarZoom.configurationTarget.workspace.description%"
+          ],
+          "scope": "window"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/zoom.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

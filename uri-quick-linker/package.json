@@ -1,8 +1,8 @@
 {
-  "name": "uri-quick-linker",
+  "name": "ce-uri-quick-linker",
   "displayName": "URI Quick Linker",
   "description": "",
-  "version": "1.0.6",
+  "version": "1.0.16",
   "license": "MIT",
   "icon": "/icon.png",
   "repository": {
@@ -122,7 +122,6 @@
         }
       }
     },
-
     "commands": [
       {
         "command": "extension.copyUriAndLineNumber",
@@ -154,10 +153,8 @@
           "command": "extension.formatUriAsLink",
           "group": "uriLinker@3"
         }
-        
       ]
     }
-
   },
   "scripts": {
     "vscode:prepublish": "yarn run compile",

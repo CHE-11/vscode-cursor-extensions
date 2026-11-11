@@ -2,6 +2,8 @@
 
 Personal VS Code and Cursor extensions. Each folder is its own extension.
 
+**All extensions code names starts with `ce-` prefix. This groups them together in the Extensions Menu for easy access.**
+
 ## [task-manager](./task-manager)
 
 Folder-aware tasks for workspaces that contain several projects. It finds every `.vscode/tasks.json` in the workspace, shows those tasks in the status bar and a sidebar, and scopes the status bar to the project of the active file.
@@ -17,6 +19,10 @@ Jump from a frontend API call to the matching backend route in a monorepo. It in
 ## [speed-start](./speed-start)
 
 Finds folders, large files, and startup extensions that slow Cursor down, then adds the ones you pick to `.cursorignore`, `.gitignore`, or the workspace search and watcher excludes.
+
+## [code-runner](./code-runner)
+
+Runs the active file, or the current selection, from a play button in the editor title. The sidebar edits the program used for each language, extension, and filename glob.
 
 ## [fold-level](./fold-level)
 

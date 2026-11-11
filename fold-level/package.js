@@ -1,13 +1,18 @@
 const { execSync } = require('child_process');
-const { mkdirSync, readFileSync, writeFileSync } = require('fs');
-const { join } = require('path');
+const { copyFileSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } = require('fs');
+const { basename, join } = require('path');
 
-const version = require('./package.json').version;
+const pkg = require('./package.json');
+const version = pkg.version;
+const extensionName = pkg.name;
 const outDir = join(__dirname, 'builds');
 mkdirSync(outDir, { recursive: true });
-const outPath = join(outDir, `fold-level-${version}.vsix`);
+const outPath = join(outDir, `${extensionName}-${version}.vsix`);
 
-const command = `pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license --out "${outPath}"`;
+const repositoryRoot = 'https://github.com/CHE-11/vscode-cursor-extensions';
+const contentUrl = `${repositoryRoot}/blob/HEAD/fold-level`;
+const imagesUrl = `${repositoryRoot}/raw/HEAD/fold-level`;
+const command = `pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license --baseContentUrl "${contentUrl}" --baseImagesUrl "${imagesUrl}" --out "${outPath}"`;
 try {
   execSync(command, { stdio: 'inherit', shell: true, cwd: __dirname });
   console.log('Packaged Fold Level...', outPath);
@@ -17,7 +22,7 @@ try {
 }
 
 try {
-  trackNewestBuild('fold-level', version);
+  trackNewestBuild(extensionName, version);
 } catch (err) {
   console.error('Packaged Fold Level, but failed to track the new build:', err && err.message);
   process.exit(err && typeof err.status === 'number' ? err.status : 1);
@@ -25,29 +30,23 @@ try {
 
 function trackNewestBuild(extensionName, version) {
   const repoRoot = join(__dirname, '..');
-  const gitignorePath = join(repoRoot, '.gitignore');
-  const relativeVsix = `${extensionName}/builds/${extensionName}-${version}.vsix`;
-  const exception = `!${relativeVsix}`;
-  const source = readFileSync(gitignorePath, 'utf8');
-  const newline = source.includes('\r\n') ? '\r\n' : '\n';
-  const pattern = new RegExp(`^!${extensionName}/builds/${extensionName}-.*\\.vsix`, 'm');
-  let next = source;
-  if (pattern.test(source)) {
-    next = source.replace(pattern, exception);
-  } else {
-    const ignoreLine = `${extensionName}/builds/*`;
-    if (source.includes(ignoreLine)) {
-      next = source.replace(ignoreLine, `${ignoreLine}${newline}${exception}`);
-    } else {
-      const trimmed = source.replace(/\s*$/, '');
-      next = `${trimmed}${newline}${newline}${ignoreLine}${newline}${exception}${newline}`;
+  const latestDir = join(repoRoot, '_latest_builds_');
+  mkdirSync(latestDir, { recursive: true });
+
+  const fileName = `${extensionName}-${version}.vsix`;
+  const relativeLatest = `_latest_builds_/${fileName}`;
+  copyFileSync(join(__dirname, 'builds', fileName), join(latestDir, fileName));
+
+  const prefixes = buildPrefixes(extensionName);
+  for (const file of readdirSync(latestDir)) {
+    if (isExtensionBuild(file, prefixes) && file !== fileName) {
+      unlinkSync(join(latestDir, file));
     }
   }
-  if (next !== source) {
-    writeFileSync(gitignorePath, next);
-  }
 
-  const tracked = execSync(`git ls-files -- "${extensionName}/builds"`, {
+  removeBuildFolderExceptions(repoRoot);
+
+  const tracked = execSync('git ls-files -- "*.vsix"', {
     cwd: repoRoot,
     encoding: 'utf8',
     shell: true,
@@ -58,8 +57,10 @@ function trackNewestBuild(extensionName, version) {
 
   for (const file of tracked) {
     const normalized = file.replace(/\\/g, '/');
-    if (normalized !== relativeVsix) {
-      execSync(`git rm --cached -- "${normalized}"`, {
+    const inBuildFolder = !normalized.startsWith('_latest_builds_/');
+    const olderLatest = normalized.startsWith('_latest_builds_/') && isExtensionBuild(normalized.slice('_latest_builds_/'.length), prefixes) && normalized !== relativeLatest;
+    if (inBuildFolder || olderLatest) {
+      execSync(`git rm --cached -f -- "${normalized}"`, {
         cwd: repoRoot,
         stdio: 'inherit',
         shell: true,
@@ -67,10 +68,33 @@ function trackNewestBuild(extensionName, version) {
     }
   }
 
-  execSync(`git add -- "${relativeVsix}" .gitignore`, {
+  execSync(`git add -- "${relativeLatest}" .gitignore`, {
     cwd: repoRoot,
     stdio: 'inherit',
     shell: true,
   });
-  console.log('Tracking', relativeVsix);
+  console.log('Tracking', relativeLatest);
+}
+
+function buildPrefixes(extensionName) {
+  const prefixes = [`${extensionName}-`];
+  const folderPrefix = `${basename(__dirname)}-`;
+  if (folderPrefix !== prefixes[0]) prefixes.push(folderPrefix);
+  return prefixes;
+}
+
+function isExtensionBuild(file, prefixes) {
+  return file.endsWith('.vsix') && prefixes.some((prefix) => file.startsWith(prefix));
+}
+
+function removeBuildFolderExceptions(repoRoot) {
+  const gitignorePath = join(repoRoot, '.gitignore');
+  const source = readFileSync(gitignorePath, 'utf8');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const drop = /^(?:[A-Za-z0-9_.-]+\/builds\/\*|![A-Za-z0-9_.-]+\/builds\/.+\.vsix)$/;
+  const kept = source.split(/\r?\n/).filter((line) => !drop.test(line));
+  const next = `${kept.join(newline).replace(/(?:\r?\n){3,}/g, `${newline}${newline}`).replace(/\s*$/, '')}${newline}`;
+  if (next !== source) {
+    writeFileSync(gitignorePath, next);
+  }
 }
