@@ -11,6 +11,7 @@
     "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
     "directory": "styled-jsx"
   },
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.91.0"
   },

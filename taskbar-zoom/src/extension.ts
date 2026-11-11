@@ -13,6 +13,8 @@ import {
 } from './zoom';
 
 const PREVIEW_DELAY_MS = 500;
+// One priority for every control. Distinct priorities leave gaps that other status bar items sort into.
+const STATUS_BAR_PRIORITY = 100;
 const DEFAULT_PRESETS = [300, 250, 200, 175, 150, 140, 130, 120, 110, 105, 100, 95, 90, 80, 75, 70, 60, 50];
 
 const messages = {
@@ -186,15 +188,16 @@ async function inputZoom(snapshot: ZoomSnapshot, current: number): Promise<void>
 }
 
 function updateStatusBar(): void {
-  const order = parseDisplayOrder(stringSetting('taskbarZoom.uiDisplayOrder', '@+%-'));
+  const order = parseDisplayOrder(stringSetting('taskbarZoom.uiDisplayOrder', '@-%+'));
   const orderKey = order.join('');
   if (orderKey !== shownOrder) {
     disposeItems();
-    order.forEach((token, index) => {
-      const item = vscode.window.createStatusBarItem(itemId(token), vscode.StatusBarAlignment.Right, 100 - index);
+    // Create left to right. Equal priority keeps that creation order, so the block stays in uiDisplayOrder.
+    for (const token of order) {
+      const item = vscode.window.createStatusBarItem(itemId(token), vscode.StatusBarAlignment.Right, STATUS_BAR_PRIORITY);
       item.show();
       items.set(token, item);
-    });
+    }
     shownOrder = orderKey;
   }
   for (const [token, item] of items) {

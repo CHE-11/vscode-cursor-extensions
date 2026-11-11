@@ -9,6 +9,7 @@
     "type": "git",
     "url": "https://github.com/CHE-11/task-manager.git"
   },
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.88.0"
   },

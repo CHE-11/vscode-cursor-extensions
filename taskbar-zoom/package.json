@@ -160,7 +160,7 @@
             "-%+@",
             "-+%@"
           ],
-          "default": "@+%-",
+          "default": "@-%+",
           "description": "%taskbarZoom.uiDisplayOrder.description%",
           "scope": "window"
         },

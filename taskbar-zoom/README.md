@@ -6,7 +6,7 @@ Maintained by che-11. The behavior comes from [Zoom Bar](https://github.com/wrai
 
 ## Status bar
 
-The default order is font-zoom reset, zoom in, the current percentage, then zoom out. Click the percentage to pick a preset or type one. `-` and `+` step the zoom. The font control runs **Editor Font Zoom Reset**.
+The default order is font-zoom reset, zoom out, the current percentage, then zoom in. Click the percentage to pick a preset or type one. `-` and `+` step the zoom. The font control runs **Editor Font Zoom Reset**.
 
 `taskbarZoom.uiDisplayOrder` uses `@` for font-zoom reset, `%` for the percentage, `+` for zoom in, and `-` for zoom out.
 
@@ -31,7 +31,7 @@ The default order is font-zoom reset, zoom in, the current percentage, then zoom
 | `taskbarZoom.zoomInLabel` | `+` | Zoom-in label. Codicons such as `$(add)` work |
 | `taskbarZoom.zoomOutLabel` | `-` | Zoom-out label |
 | `taskbarZoom.fontZoomResetLabel` | `$(text-size)` | Font-zoom reset label |
-| `taskbarZoom.uiDisplayOrder` | `@+%-` | Which controls appear, and in what order |
+| `taskbarZoom.uiDisplayOrder` | `@-%+` | Which controls appear, and in what order |
 | `taskbarZoom.configurationTarget` | auto | `auto`, `global`, or `workspace` |
 
 `auto` updates a workspace zoom when one is already set, and otherwise updates the user zoom.

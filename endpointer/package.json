@@ -4,6 +4,7 @@
   "description": "",
   "version": "1.0.54",
   "license": "MIT",
+  "publisher": "che-11",
   "icon": "icon.png",
   "repository": {
     "type": "git",

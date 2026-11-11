@@ -5,6 +5,7 @@
   "version": "0.1.11",
   "license": "MIT",
   "publisher": "che-11",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.88.0"
   },
