@@ -1,0 +1,149 @@
+{
+  "name": "ce-make-hidden",
+  "displayName": "CE | Make Hidden",
+  "description": "Hide and show files from the explorer, with a Hidden Items view and saved workspaces.",
+  "version": "1.0.4",
+  "license": "MIT",
+  "publisher": "che-11",
+  "author": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "make-hidden"
+  },
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "workspace",
+    "show",
+    "hide",
+    "files",
+    "exclude"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "makeHidden.ViewPane.hiddenItems",
+          "name": "Hidden Items"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "make-hidden.hide",
+        "title": "Hide",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.hide.multiple",
+        "title": "Hide Multiple",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.hide.by",
+        "title": "Hide By ...",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.show.only",
+        "title": "Show Only",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.undo",
+        "title": "Undo Last",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.remove.search",
+        "title": "Remove Search",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.remove.item",
+        "title": "Put Back",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.remove.all",
+        "title": "Empty",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.workspace",
+        "title": "Workspaces",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.workspace.create",
+        "title": "Create Workspace",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.workspace.load",
+        "title": "Switch Workspace",
+        "category": "Make Hidden"
+      },
+      {
+        "command": "make-hidden.workspace.delete",
+        "title": "Delete Workspace",
+        "category": "Make Hidden"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "make-hidden.hide",
+          "group": "make-hidden@1"
+        },
+        {
+          "command": "make-hidden.hide.multiple",
+          "group": "make-hidden@1"
+        },
+        {
+          "command": "make-hidden.hide.by",
+          "group": "make-hidden@1"
+        },
+        {
+          "command": "make-hidden.show.only",
+          "group": "make-hidden@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "make-hidden.workspace",
+          "when": "view == makeHidden.ViewPane.hiddenItems",
+          "group": "workspaceManager"
+        },
+        {
+          "command": "make-hidden.remove.search",
+          "when": "view == makeHidden.ViewPane.hiddenItems"
+        },
+        {
+          "command": "make-hidden.remove.all",
+          "when": "view == makeHidden.ViewPane.hiddenItems"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

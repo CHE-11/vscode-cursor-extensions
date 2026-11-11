@@ -1,8 +1,8 @@
 {
   "name": "ce-endpointer",
-  "displayName": "Endpointer",
+  "displayName": "CE | Endpointer",
   "description": "",
-  "version": "1.0.50",
+  "version": "1.0.54",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {

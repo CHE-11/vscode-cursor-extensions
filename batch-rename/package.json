@@ -1,8 +1,8 @@
 {
   "name": "ce-batch-rename",
-  "displayName": "Batch Rename",
+  "displayName": "CE | Batch Rename",
   "description": "Rename several Explorer files at once from a text editor.",
-  "version": "1.0.7",
+  "version": "1.0.11",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",

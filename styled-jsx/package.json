@@ -1,0 +1,88 @@
+{
+  "name": "ce-styled-jsx",
+  "displayName": "CE | Styled JSX",
+  "description": "Syntax highlighting and language features for styled-jsx.",
+  "version": "1.0.1",
+  "publisher": "che-11",
+  "author": "che-11",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "styled-jsx"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "styled-jsx",
+    "css",
+    "syntax",
+    "jsx"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "source.css.jsx.styled",
+        "aliases": [
+          "CSS (Styled JSX)"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "source.css.jsx.styled",
+        "scopeName": "source.css.jsx.styled",
+        "path": "./syntaxes/css.json"
+      },
+      {
+        "injectTo": [
+          "source.js",
+          "source.ts",
+          "source.jsx",
+          "source.js.jsx",
+          "source.tsx"
+        ],
+        "scopeName": "styled-jsx",
+        "path": "./syntaxes/jsx-styled.json",
+        "embeddedLanguages": {
+          "source.css.scss": "css",
+          "meta.embedded.line.ts": "typescript"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./ --noEmit && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "test": "tsc -p ./ && node --test out/src/server/styled-jsx.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.91.0",
+    "esbuild": "^0.25.11",
+    "typescript": "^5.9.3",
+    "vscode-css-languageservice": "6.3.10",
+    "vscode-languageclient": "^11.0.0",
+    "vscode-languageserver": "^11.0.0",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  }
+}

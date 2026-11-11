@@ -1,8 +1,8 @@
 {
   "name": "ce-taskbar-zoom",
-  "displayName": "Taskbar Zoom",
+  "displayName": "CE | Taskbar Zoom",
   "description": "Zoom the workbench from the status bar.",
-  "version": "1.0.11",
+  "version": "1.0.14",
   "license": "BSL-1.0",
   "publisher": "che-11",
   "author": "che-11",

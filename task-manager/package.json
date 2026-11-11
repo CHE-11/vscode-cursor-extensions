@@ -1,8 +1,8 @@
 {
   "name": "ce-task-manager",
-  "displayName": "Task Manager",
+  "displayName": "CE | Task Manager",
   "description": "Folder-aware VS Code / Cursor tasks in the status bar and a dedicated sidebar panel.",
-  "version": "1.0.29",
+  "version": "1.0.33",
   "license": "MIT",
   "publisher": "che-11",
   "repository": {

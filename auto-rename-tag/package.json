@@ -1,8 +1,8 @@
 {
   "name": "ce-auto-rename-tag",
-  "displayName": "Auto Rename Tag",
+  "displayName": "CE | Auto Rename Tag",
   "description": "Rename the paired HTML or XML tag while you type.",
-  "version": "1.0.7",
+  "version": "1.0.11",
   "publisher": "che-11",
   "author": "che-11",
   "license": "MIT",

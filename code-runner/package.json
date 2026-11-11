@@ -1,8 +1,8 @@
 {
   "name": "ce-code-runner",
-  "displayName": "Code Runner",
+  "displayName": "CE | Code Runner",
   "description": "Run the current file from the editor title, and edit the program for each file type in the sidebar.",
-  "version": "0.1.7",
+  "version": "0.1.11",
   "license": "MIT",
   "publisher": "che-11",
   "engines": {

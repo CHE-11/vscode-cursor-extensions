@@ -1,0 +1,150 @@
+{
+  "name": "ce-close-tabs",
+  "displayName": "CE | Close Tabs",
+  "description": "Close unchanged tabs, diff editors, tabs to the left, and tabs of a chosen type.",
+  "version": "1.0.4",
+  "license": "MIT",
+  "publisher": "che-11",
+  "author": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "close-tabs"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "close",
+    "tabs",
+    "tab",
+    "left",
+    "diff",
+    "git",
+    "unchanged",
+    "type"
+  ],
+  "activationEvents": [],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "close-tabs.git-unchanged",
+        "title": "Close Unchanged",
+        "category": "Close Tabs"
+      },
+      {
+        "command": "git.closeAllDiffEditors",
+        "title": "Close Diff Editors",
+        "category": "Close Tabs"
+      },
+      {
+        "command": "close-tabs.close-left",
+        "title": "Close to the Left",
+        "category": "Close Tabs",
+        "enablement": "!activeEditorIsFirstInGroup"
+      },
+      {
+        "command": "close-tabs.closeAllOfType",
+        "title": "Close all of Type",
+        "category": "Close Tabs"
+      },
+      {
+        "command": "close-tabs.closeDefaultTypes",
+        "title": "Close default Types",
+        "category": "Close Tabs"
+      }
+    ],
+    "menus": {
+      "editor/title/context": [
+        {
+          "command": "close-tabs.git-unchanged",
+          "group": "1_close@20",
+          "when": "config.closeTabs.showCloseUnchanged"
+        },
+        {
+          "command": "git.closeAllDiffEditors",
+          "group": "1_close@29",
+          "when": "config.closeTabs.showCloseDiffEditors"
+        },
+        {
+          "command": "close-tabs.close-left",
+          "group": "1_close@30",
+          "when": "config.closeTabs.showCloseToTheLeft"
+        },
+        {
+          "command": "close-tabs.closeAllOfType",
+          "group": "1_close@31",
+          "when": "config.closeTabs.showCloseType"
+        },
+        {
+          "command": "close-tabs.closeDefaultTypes",
+          "group": "1_close@32",
+          "when": "config.closeTabs.closeDefaultTypes && config.closeTabs.extensionsToClose.length > 0"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Close Tabs",
+      "properties": {
+        "closeTabs.allowClosePinnedTabs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow closing pinned tabs."
+        },
+        "closeTabs.showCloseUnchanged": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the \"Close Unchanged\" button."
+        },
+        "closeTabs.showCloseDiffEditors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the \"Close Diff Editors\" button."
+        },
+        "closeTabs.showCloseToTheLeft": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the \"Close to the Left\" button."
+        },
+        "closeTabs.showCloseType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show \"Close all of Type\" command in the context menu"
+        },
+        "closeTabs.closeDefaultTypes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show \"Close default Types\" command in the context menu"
+        },
+        "closeTabs.extensionsToClose": {
+          "type": "array",
+          "default": [],
+          "description": "List of file extensions to close with the command \"Close default types\""
+        },
+        "closeTabs.extensionsCaseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the file extension matching is case sensitive"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/**/*.test.js",
+    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

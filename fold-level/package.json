@@ -1,8 +1,8 @@
 {
   "name": "ce-fold-level",
-  "displayName": "Fold Level",
+  "displayName": "CE | Fold Level",
   "description": "Fold the active editor to a chosen level from the status bar.",
-  "version": "1.0.10",
+  "version": "1.0.14",
   "publisher": "che-11",
   "author": "che-11",
   "repository": {

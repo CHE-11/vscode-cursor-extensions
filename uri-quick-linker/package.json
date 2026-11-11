@@ -1,8 +1,8 @@
 {
   "name": "ce-uri-quick-linker",
-  "displayName": "URI Quick Linker",
+  "displayName": "CE | URI Quick Linker",
   "description": "",
-  "version": "1.0.16",
+  "version": "1.0.19",
   "license": "MIT",
   "icon": "/icon.png",
   "repository": {

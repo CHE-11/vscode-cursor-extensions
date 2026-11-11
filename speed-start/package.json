@@ -1,8 +1,8 @@
 {
   "name": "ce-speed-start",
-  "displayName": "Speed Start",
+  "displayName": "CE | Speed Start",
   "description": "Find folders, large files, and startup extensions that slow Cursor down, then ignore them in one click.",
-  "version": "0.1.19",
+  "version": "0.1.23",
   "license": "MIT",
   "publisher": "che-11",
   "engines": {
