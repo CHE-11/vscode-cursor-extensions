@@ -19,6 +19,22 @@
 
     },
     {
+      "label": "Install All",
+      "type": "shell",
+      "command": "node install-all-vsix.mjs",
+      "icon": {
+        "id": "extensions",
+        "color": "terminal.ansiYellow"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "statusbar": {
+          "hide": false,
+          "color": "#e2c14d"
+        }
+      }
+    },
+    {
       "label": "Publish All",
       "type": "shell",
       "command": "node publish-all.mjs",
