@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   levelToPercent,
   nextZoomLevel,
+  workbenchZoomLevel,
   normalizePresets,
   parseDisplayOrder,
   percentToDisplayString,
@@ -33,6 +34,18 @@ test('multiplicative steps scale the current zoom and additive steps add the uni
   assert.equal(roundZoom(levelToPercent(nextZoomLevel(0, 10, 'in', 'additive') ?? 0)), 110);
   assert.equal(roundZoom(levelToPercent(nextZoomLevel(0, 10, 'out', 'additive') ?? 0)), 90);
   assert.equal(nextZoomLevel(percentToLevel(20), 20, 'out', 'additive'), undefined);
+});
+
+test('workbench zoom shortcuts step one rounded level and stop at the limits', () => {
+  assert.equal(workbenchZoomLevel(0, 'in'), 1);
+  assert.equal(workbenchZoomLevel(0, 'out'), -1);
+  assert.equal(workbenchZoomLevel(-2.0910347954528925, 'in'), -1);
+  assert.equal(workbenchZoomLevel(-2.0910347954528925, 'out'), -3);
+  assert.equal(workbenchZoomLevel(7.4, 'in'), 8);
+  assert.equal(workbenchZoomLevel(7.6, 'in'), undefined);
+  assert.equal(workbenchZoomLevel(8, 'in'), undefined);
+  assert.equal(workbenchZoomLevel(-8, 'out'), undefined);
+  assert.equal(workbenchZoomLevel(Number.NaN, 'in'), undefined);
 });
 
 test('presets and display order drop duplicates and unknown tokens', () => {

@@ -2,7 +2,15 @@ const { execSync } = require('child_process');
 const { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } = require('fs');
 const { basename, join } = require('path');
 
-const pkg = require('./package.json');
+try {
+  execSync('pnpm version patch --no-git-tag-version', { stdio: 'inherit', shell: true, cwd: __dirname });
+  execSync('pnpm run compile', { stdio: 'inherit', shell: true, cwd: __dirname });
+} catch (err) {
+  console.error('Failed to bump the version and build:', err && err.message);
+  process.exit(err && typeof err.status === 'number' ? err.status : 1);
+}
+
+const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
 const version = pkg.version;
 const extensionName = pkg.name;
 const outDir = join(__dirname, 'builds');

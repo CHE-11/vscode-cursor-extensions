@@ -2,7 +2,7 @@
   "name": "ce-error-gutters",
   "displayName": "CE | Error Gutters",
   "description": "Show error, warning, and info icons in the gutter beside the line numbers.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "license": "GPLv3",
   "publisher": "che-11",
   "author": "che-11",
@@ -33,7 +33,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+    "package": "node package.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

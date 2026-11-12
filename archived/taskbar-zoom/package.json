@@ -2,7 +2,7 @@
   "name": "ce-taskbar-zoom",
   "displayName": "CE | Taskbar Zoom",
   "description": "Zoom the workbench from the status bar.",
-  "version": "1.0.14",
+  "version": "1.0.16",
   "license": "BSL-1.0",
   "publisher": "che-11",
   "author": "che-11",
@@ -43,6 +43,75 @@
         "command": "taskbar-zoom.zoomOut",
         "title": "%taskbar-zoom.zoomOut.title%",
         "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.followZoomIn",
+        "title": "%taskbar-zoom.followZoomIn.title%",
+        "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.followZoomOut",
+        "title": "%taskbar-zoom.followZoomOut.title%",
+        "category": "%taskbar-zoom.title%"
+      },
+      {
+        "command": "taskbar-zoom.followZoomReset",
+        "title": "%taskbar-zoom.followZoomReset.title%",
+        "category": "%taskbar-zoom.title%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "taskbar-zoom.followZoomIn",
+          "when": "false"
+        },
+        {
+          "command": "taskbar-zoom.followZoomOut",
+          "when": "false"
+        },
+        {
+          "command": "taskbar-zoom.followZoomReset",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "taskbar-zoom.followZoomIn",
+        "key": "ctrl+=",
+        "mac": "cmd+="
+      },
+      {
+        "command": "taskbar-zoom.followZoomIn",
+        "key": "ctrl+shift+=",
+        "mac": "cmd+shift+="
+      },
+      {
+        "command": "taskbar-zoom.followZoomIn",
+        "key": "ctrl+numpad_add",
+        "mac": "cmd+numpad_add"
+      },
+      {
+        "command": "taskbar-zoom.followZoomOut",
+        "key": "ctrl+-",
+        "mac": "cmd+-"
+      },
+      {
+        "command": "taskbar-zoom.followZoomOut",
+        "key": "ctrl+shift+-",
+        "mac": "cmd+shift+-",
+        "when": "!isLinux"
+      },
+      {
+        "command": "taskbar-zoom.followZoomOut",
+        "key": "ctrl+numpad_subtract",
+        "mac": "cmd+numpad_subtract"
+      },
+      {
+        "command": "taskbar-zoom.followZoomReset",
+        "key": "ctrl+numpad0",
+        "mac": "cmd+numpad0"
       }
     ],
     "configuration": {
@@ -187,7 +256,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "pnpm run compile && node --test out/src/zoom.test.js",
-    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+    "package": "node package.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

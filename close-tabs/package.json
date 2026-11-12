@@ -2,7 +2,7 @@
   "name": "ce-close-tabs",
   "displayName": "CE | Close Tabs",
   "description": "Close unchanged tabs, diff editors, tabs to the left, and tabs of a chosen type.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",
@@ -140,7 +140,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "pnpm run compile && node --test out/src/**/*.test.js",
-    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+    "package": "node package.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

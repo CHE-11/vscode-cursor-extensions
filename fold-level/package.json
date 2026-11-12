@@ -2,7 +2,7 @@
   "name": "ce-fold-level",
   "displayName": "CE | Fold Level",
   "description": "Fold the active editor to a chosen level from the status bar.",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "publisher": "che-11",
   "author": "che-11",
   "repository": {
@@ -114,7 +114,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "pnpm run compile && node --test out/src/fold.test.js",
-    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+    "package": "node package.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

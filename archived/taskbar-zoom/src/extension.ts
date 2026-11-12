@@ -1,18 +1,22 @@
 import * as vscode from 'vscode';
 import {
   levelToPercent,
+  MAX_WORKBENCH_ZOOM_LEVEL,
+  MIN_WORKBENCH_ZOOM_LEVEL,
   nextZoomLevel,
   normalizePresets,
   parseDisplayOrder,
   percentToDisplayString,
   percentToLevel,
   roundZoom,
+  workbenchZoomLevel,
   zoomInputError,
   type ZoomDirection,
   type ZoomUnitType,
 } from './zoom';
 
 const PREVIEW_DELAY_MS = 500;
+const KEYBOARD_ZOOM_KEY = 'keyboardZoomLevel';
 // One priority for every control. Distinct priorities leave gaps that other status bar items sort into.
 const STATUS_BAR_PRIORITY = 100;
 const DEFAULT_PRESETS = [300, 250, 200, 175, 150, 140, 130, 120, 110, 105, 100, 95, 90, 80, 75, 70, 60, 50];
@@ -42,17 +46,31 @@ type ZoomChoice = vscode.QuickPickItem & ({ action: 'level'; level: number } | {
 const items = new Map<string, vscode.StatusBarItem>();
 let shownOrder = '';
 let shownLevel: number | undefined;
+// Zoom In/Out from the keyboard changes the active window only and does not write window.zoomLevel.
+let keyboardZoomLevel: number | undefined;
+let zoomMemory: vscode.Memento | undefined;
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
 let writeGeneration = 0;
 
 export function activate(context: vscode.ExtensionContext): void {
+  restoreKeyboardZoom(context.workspaceState);
   context.subscriptions.push(
     vscode.commands.registerCommand('taskbar-zoom.selectZoom', selectZoom),
     vscode.commands.registerCommand('taskbar-zoom.resetZoom', () => writeLevel(percentToLevel(defaultZoom()))),
     vscode.commands.registerCommand('taskbar-zoom.zoomIn', () => step('in')),
     vscode.commands.registerCommand('taskbar-zoom.zoomOut', () => step('out')),
+    vscode.commands.registerCommand('taskbar-zoom.followZoomIn', () => followWorkbenchZoom('in')),
+    vscode.commands.registerCommand('taskbar-zoom.followZoomOut', () => followWorkbenchZoom('out')),
+    vscode.commands.registerCommand('taskbar-zoom.followZoomReset', () => followWorkbenchZoom('reset')),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('taskbarZoom') || event.affectsConfiguration('window.zoomLevel')) {
+      if (event.affectsConfiguration('window.zoomLevel') || event.affectsConfiguration('window.zoomPerWindow')) {
+        rememberKeyboardZoom(undefined);
+      }
+      if (
+        event.affectsConfiguration('taskbarZoom') ||
+        event.affectsConfiguration('window.zoomLevel') ||
+        event.affectsConfiguration('window.zoomPerWindow')
+      ) {
         updateStatusBar();
       }
     }),
@@ -68,6 +86,41 @@ export function deactivate(): void {}
 
 function text(key: keyof typeof messages): string {
   return messages[key];
+}
+
+async function followWorkbenchZoom(direction: ZoomDirection | 'reset'): Promise<void> {
+  const perWindow = booleanSetting('window.zoomPerWindow', true);
+  const previous = keyboardZoomLevel;
+  const command = workbenchZoomCommand(direction);
+  if (direction === 'reset') {
+    rememberKeyboardZoom(perWindow ? undefined : 0);
+  } else {
+    const next = workbenchZoomLevel(trackedLevel(), direction);
+    if (next === undefined) {
+      return;
+    }
+    rememberKeyboardZoom(next);
+  }
+  updateStatusBar();
+  try {
+    await vscode.commands.executeCommand(command);
+  } catch (error) {
+    rememberKeyboardZoom(previous);
+    updateStatusBar();
+    const message = error instanceof Error ? error.message : String(error);
+    void vscode.window.showErrorMessage(`Taskbar Zoom could not change the zoom. ${message}`);
+  }
+}
+
+function workbenchZoomCommand(direction: ZoomDirection | 'reset'): string {
+  switch (direction) {
+    case 'in':
+      return 'workbench.action.zoomIn';
+    case 'out':
+      return 'workbench.action.zoomOut';
+    default:
+      return 'workbench.action.zoomReset';
+  }
 }
 
 async function step(direction: ZoomDirection): Promise<void> {
@@ -335,7 +388,36 @@ function readLevel(): number {
   if (shownLevel !== undefined) {
     return shownLevel;
   }
+  return trackedLevel();
+}
+
+function trackedLevel(): number {
+  if (keyboardZoomLevel !== undefined) {
+    return keyboardZoomLevel;
+  }
   return numberSetting('window.zoomLevel', 0);
+}
+
+function restoreKeyboardZoom(memory: vscode.Memento): void {
+  zoomMemory = memory;
+  if (!booleanSetting('window.zoomPerWindow', true)) {
+    rememberKeyboardZoom(undefined);
+    return;
+  }
+  const saved = memory.get<number>(KEYBOARD_ZOOM_KEY);
+  if (
+    typeof saved === 'number' &&
+    Number.isFinite(saved) &&
+    saved >= MIN_WORKBENCH_ZOOM_LEVEL &&
+    saved <= MAX_WORKBENCH_ZOOM_LEVEL
+  ) {
+    keyboardZoomLevel = saved;
+  }
+}
+
+function rememberKeyboardZoom(level: number | undefined): void {
+  keyboardZoomLevel = level;
+  void zoomMemory?.update(KEYBOARD_ZOOM_KEY, level);
 }
 
 function readSnapshot(): ZoomSnapshot {

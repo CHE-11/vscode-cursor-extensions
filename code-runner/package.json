@@ -2,7 +2,7 @@
   "name": "ce-code-runner",
   "displayName": "CE | Code Runner",
   "description": "Run the current file from the editor title, and edit the program for each file type in the sidebar.",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "license": "MIT",
   "publisher": "che-11",
   "icon": "icon.png",
@@ -432,7 +432,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "pnpm run compile && node --test out/src/executor.test.js",
-    "package": "pnpm version patch --no-git-tag-version && pnpm run compile && node package.js"
+    "package": "node package.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

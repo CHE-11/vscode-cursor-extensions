@@ -4,6 +4,9 @@ const ZOOM_LOG = Math.log(SYSTEM_ZOOM_RATE);
 
 export const MIN_ZOOM_PERCENT = 25;
 export const MAX_ZOOM_PERCENT = 400;
+// Same bounds as workbench.action.zoomIn / zoomOut.
+export const MIN_WORKBENCH_ZOOM_LEVEL = -8;
+export const MAX_WORKBENCH_ZOOM_LEVEL = 8;
 
 export type ZoomDirection = 'in' | 'out';
 export type ZoomUnitType = 'multiplicative' | 'additive';
@@ -22,6 +25,18 @@ export function roundZoom(value: number): number {
 
 export function percentToDisplayString(percent: number, locales?: string | string[]): string {
   return roundZoom(percent / CENT).toLocaleString(locales, { style: 'percent' });
+}
+
+// Ctrl+/- steps by one rounded level and ignores fractional window.zoomLevel values.
+export function workbenchZoomLevel(currentLevel: number, direction: ZoomDirection): number | undefined {
+  if (!Number.isFinite(currentLevel)) {
+    return undefined;
+  }
+  const next = Math.round(currentLevel) + (direction === 'in' ? 1 : -1);
+  if (next > MAX_WORKBENCH_ZOOM_LEVEL || next < MIN_WORKBENCH_ZOOM_LEVEL) {
+    return undefined;
+  }
+  return next;
 }
 
 export function nextZoomLevel(
