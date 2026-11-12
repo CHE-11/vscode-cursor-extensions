@@ -1,0 +1,2 @@
+SELECT * FROM Table1
+WHERE userId = 1

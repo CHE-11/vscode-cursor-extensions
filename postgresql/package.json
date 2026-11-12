@@ -1,0 +1,98 @@
+{
+  "name": "ce-postgresql",
+  "displayName": "CE | PostgreSQL",
+  "description": "PostgreSQL syntax, snippets, signature help, and running the current file with psql.",
+  "version": "1.0.3",
+  "publisher": "che-11",
+  "author": "che-11",
+  "license": "Apache-2.0",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "postgresql"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "postgres",
+    "postgresql",
+    "pgsql",
+    "sql",
+    "psql"
+  ],
+  "activationEvents": [
+    "onLanguage:pgsql"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "pgsql",
+        "aliases": [
+          "PL/pgSQL (Postgres)",
+          "pgsql"
+        ],
+        "extensions": [
+          ".pgsql"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pgsql",
+        "scopeName": "source.plpgsql.postgres",
+        "path": "./syntaxes/pgsql.tmLanguage"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "pgsql",
+        "path": "./snippets/pgsql.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "postgres.executeSql",
+        "title": "Execute File in Server",
+        "category": "Postgres"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "PostgreSQL",
+      "properties": {
+        "postgreSql.hostName": {
+          "type": "string",
+          "default": "localhost",
+          "description": "The PostgreSQL server to connect to when running a file with psql."
+        },
+        "postgreSql.username": {
+          "type": "string",
+          "default": "postgres",
+          "description": "The PostgreSQL user name to connect as when running a file with psql."
+        },
+        "postgreSql.dbName": {
+          "type": "string",
+          "default": "postgres",
+          "description": "The PostgreSQL database to use when running a file with psql."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}
