@@ -11,6 +11,15 @@ export interface StyledJsxRange {
 export interface StyledJsx {
   cssDocument: TextDocument;
   stylesheet: Stylesheet;
+  interpolations: StyledJsxRange[];
+}
+
+export interface DiagnosticRange {
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  code?: string | number;
 }
 
 const styledTagNames = new Set(['css', 'css.global', 'css.resolve']);
@@ -172,6 +181,20 @@ function templateContentRange(template: ts.TemplateLiteral): StyledJsxRange | un
   return { start, end };
 }
 
+export function omitInterpolationDiagnostics<T extends DiagnosticRange>(
+  document: TextDocument,
+  diagnostics: T[],
+  interpolations: readonly StyledJsxRange[],
+): T[] {
+  if (interpolations.length === 0 || diagnostics.length === 0) {
+    return diagnostics;
+  }
+  return diagnostics.filter((diagnostic) => {
+    return !diagnosticOverlapsInterpolation(document, diagnostic, interpolations)
+      && !isEmptyInterpolatedValue(document, diagnostic, interpolations);
+  });
+}
+
 function maskDocument(
   document: TextDocument,
   ranges: StyledJsxRange[],
@@ -179,6 +202,7 @@ function maskDocument(
 ): StyledJsx {
   const text = document.getText();
   const parts: string[] = [];
+  const interpolations: StyledJsxRange[] = [];
   let cursor = 0;
 
   for (const range of ranges) {
@@ -188,7 +212,7 @@ function maskDocument(
       continue;
     }
     parts.push(blankNonNewlines(text.slice(cursor, start)));
-    parts.push(blankInterpolations(text.slice(start, end)));
+    parts.push(replaceInterpolations(text.slice(start, end), start, interpolations));
     cursor = end;
   }
   parts.push(blankNonNewlines(text.slice(cursor)));
@@ -197,22 +221,85 @@ function maskDocument(
   return {
     cssDocument,
     stylesheet: stylesheets.get(cssDocument),
+    interpolations,
   };
 }
 
-function blankInterpolations(css: string): string {
+function replaceInterpolations(css: string, offset: number, interpolations: StyledJsxRange[]): string {
   let result = '';
   for (let index = 0; index < css.length; index++) {
     if (css.startsWith('${', index)) {
       const expressionEnd = findInterpolationEnd(css, index + 2);
       const end = expressionEnd === -1 ? css.length : expressionEnd;
-      result += blankNonNewlines(css.slice(index, end));
+      interpolations.push({ start: offset + index, end: offset + end });
+      result += interpolationPlaceholder(css.slice(index, end));
       index = end - 1;
       continue;
     }
     result += css[index];
   }
   return result;
+}
+
+// `${value}` is valid styled-jsx. A stand-in ident keeps the property from looking empty to the CSS checker.
+function interpolationPlaceholder(text: string): string {
+  let result = '';
+  let insertedValue = false;
+  for (const char of text) {
+    if (char === '\n' || char === '\r') {
+      result += char;
+      continue;
+    }
+    if (!insertedValue) {
+      result += 'x';
+      insertedValue = true;
+      continue;
+    }
+    result += ' ';
+  }
+  return result;
+}
+
+function diagnosticOverlapsInterpolation(
+  document: TextDocument,
+  diagnostic: DiagnosticRange,
+  interpolations: readonly StyledJsxRange[],
+): boolean {
+  const start = document.offsetAt(diagnostic.range.start);
+  const end = document.offsetAt(diagnostic.range.end);
+  return interpolations.some((range) => start < range.end && end > range.start);
+}
+
+function isEmptyInterpolatedValue(
+  document: TextDocument,
+  diagnostic: DiagnosticRange,
+  interpolations: readonly StyledJsxRange[],
+): boolean {
+  if (diagnostic.code !== 'css-propertyvalueexpected') {
+    return false;
+  }
+  const text = document.getText();
+  const errorAt = document.offsetAt(diagnostic.range.start);
+  let colon = errorAt - 1;
+  while (colon >= 0 && text[colon] !== ':' && text[colon] !== '{' && text[colon] !== ';' && text[colon] !== '}') {
+    colon--;
+  }
+  if (text[colon] !== ':') {
+    return false;
+  }
+  let sawInterpolation = false;
+  for (let index = colon + 1; index < errorAt; index++) {
+    const char = text[index];
+    if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+      continue;
+    }
+    const inside = interpolations.some((range) => index >= range.start && index < range.end);
+    if (!inside) {
+      return false;
+    }
+    sawInterpolation = true;
+  }
+  return sawInterpolation;
 }
 
 function findInterpolationEnd(text: string, start: number): number {

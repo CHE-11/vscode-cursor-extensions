@@ -18,7 +18,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { CodeActionContext as CssCodeActionContext, getCSSLanguageService, LanguageSettings } from 'vscode-css-languageservice';
 import { getLanguageModelCache } from './language-model-cache';
-import { getStyledJsx, getStyledJsxUnderCursor, StyledJsx } from './styled-jsx';
+import { getStyledJsx, getStyledJsxUnderCursor, omitInterpolationDiagnostics, StyledJsx } from './styled-jsx';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -169,7 +169,11 @@ async function validateTextDocument(document: TextDocument): Promise<void> {
   }
   connection.sendDiagnostics({
     uri: document.uri,
-    diagnostics: cssLanguageService.doValidation(styled.cssDocument, styled.stylesheet, settings),
+    diagnostics: omitInterpolationDiagnostics(
+      styled.cssDocument,
+      cssLanguageService.doValidation(styled.cssDocument, styled.stylesheet, settings),
+      styled.interpolations,
+    ),
   });
 }
 

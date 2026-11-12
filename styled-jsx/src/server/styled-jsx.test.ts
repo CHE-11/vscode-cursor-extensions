@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Stylesheet } from 'vscode-css-languageservice';
+import { getCSSLanguageService, Stylesheet } from 'vscode-css-languageservice';
 import { LanguageModelCache } from './language-model-cache';
-import { getStyledJsx, getStyledJsxUnderCursor } from './styled-jsx';
+import { getStyledJsx, getStyledJsxUnderCursor, omitInterpolationDiagnostics } from './styled-jsx';
 
 function cache(): LanguageModelCache<Stylesheet> {
   return {
@@ -87,7 +87,7 @@ test('css text inside a string or comment is not a template', () => {
   assert.equal(getStyledJsx(document(commentSource), cache()), undefined);
 });
 
-test('interpolations are blanked, including multiline expressions, without moving the css', () => {
+test('interpolations keep their place and stay valid css values, including multiline expressions', () => {
   const source = [
     'export const button = css`',
     '  button {',
@@ -103,14 +103,76 @@ test('interpolations are blanked, including multiline expressions, without movin
   const styled = getStyledJsx(document(source), cache());
   const text = styled?.cssDocument.getText() ?? '';
   const lines = text.split('\n');
+  const colorExpression = "${'red'}";
   assert.equal(text.length, source.length);
   assert.equal(lines.length, source.split('\n').length);
-  assert.equal(lines[2], "    color: ${'red'};".replace("${'red'}", ' '.repeat("${'red'}".length)));
+  assert.equal(lines[2], `    color: ${'x' + ' '.repeat(colorExpression.length - 1)};`);
   assert.equal(lines[3].includes('padding:'), true);
   assert.equal(lines[4].trim(), '');
   assert.equal(lines[5].endsWith('px;'), true);
   assert.equal(lines[6], '    content: "|";');
 });
+
+test('an interpolated property value is not a css error', () => {
+  const sources = [
+    [
+      'export const button = css`',
+      '  div {',
+      '    background-color: ${myTheme.primary_bg};',
+      '  }',
+      '`;',
+    ].join('\n'),
+    [
+      'const View = () => (',
+      '  <style jsx>{`',
+      '    div { background-color: ${myTheme.primary_bg}; }',
+      '  `}</style>',
+      ');',
+    ].join('\n'),
+  ];
+
+  for (const source of sources) {
+    assert.deepEqual(cssDiagnostics(source).map((item) => item.message), []);
+  }
+});
+
+test('a missing property value is still reported beside an interpolation', () => {
+  const source = [
+    'export const button = css`',
+    '  div {',
+    '    background-color: ;',
+    '    color: ${myTheme.primary_bg};',
+    '  }',
+    '`;',
+  ].join('\n');
+
+  const diagnostics = cssDiagnostics(source);
+  assert.deepEqual(diagnostics.map((item) => item.message), ['property value expected']);
+  const styled = getStyledJsx(document(source), cache());
+  assert.ok(styled);
+  assert.equal(source[styled.cssDocument.offsetAt(diagnostics[0].range.start)], ';');
+});
+
+function cssDiagnostics(source: string) {
+  const service = getCSSLanguageService();
+  const styled = getStyledJsx(document(source), {
+    get(cssDocument) {
+      return service.parseStylesheet(cssDocument);
+    },
+    onDocumentRemoved() {
+      return undefined;
+    },
+    dispose() {
+      return undefined;
+    },
+  });
+  assert.ok(styled);
+  return omitInterpolationDiagnostics(
+    styled.cssDocument,
+    service.doValidation(styled.cssDocument, styled.stylesheet, {}),
+    styled.interpolations,
+  );
+}
 
 test('language features are limited to the cursor inside a styled-jsx template', () => {
   const source = 'const resolved = css.resolve`div { display: flex; }`;\n';
