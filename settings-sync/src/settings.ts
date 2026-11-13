@@ -15,6 +15,7 @@ export interface SyncSettings {
   quietSync: boolean;
   removeExtensions: boolean;
   syncExtensions: boolean;
+  syncChats: boolean;
   githubEnterpriseUrl: string;
   downloadPublicGist: boolean;
   hostName: string;
@@ -33,6 +34,7 @@ const SETTING_KEYS: Array<keyof SyncSettings> = [
   'quietSync',
   'removeExtensions',
   'syncExtensions',
+  'syncChats',
   'githubEnterpriseUrl',
   'downloadPublicGist',
   'hostName',
@@ -54,6 +56,7 @@ export function readSettings(): SyncSettings {
     quietSync: config.get<boolean>('quietSync') === true,
     removeExtensions: config.get<boolean>('removeExtensions') === true,
     syncExtensions: config.get<boolean>('syncExtensions') !== false,
+    syncChats: config.get<boolean>('syncChats') !== false,
     githubEnterpriseUrl: (config.get<string>('githubEnterpriseUrl') || '').trim(),
     downloadPublicGist: config.get<boolean>('downloadPublicGist') === true,
     hostName: (config.get<string>('hostName') || '').trim(),

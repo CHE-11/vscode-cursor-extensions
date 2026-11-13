@@ -26,7 +26,8 @@ import {
   workspaceFileTarget,
 } from './safe';
 import { clearSettings, localSettingsPath, proxyUrl, readLocal, readSettings, updateSettings, writeLocal, type SyncSettings } from './settings';
-import { optionActions, optionsMenu, type SyncAction } from './options';
+import { exportChats, importChats, isChatChunkName } from './chats';
+import { optionActions, optionsMenu, type SyncAction, type ToggleKey } from './options';
 import { showSummary } from './summary';
 import { clearToken, getToken, promptToken } from './token';
 import { stopWatching, watchUploads } from './watcher';
@@ -54,7 +55,8 @@ export async function upload(app: App, options: RunOptions = {}): Promise<void> 
     const local = await loadLocal(app);
     const client = await createClient(token, settings.githubEnterpriseUrl, proxyUrl());
     const uploadedAt = new Date().toISOString();
-    const { files, ignored } = await collectFiles(app, local, settings, uploadedAt);
+    const collected = await collectFiles(app, local, settings, uploadedAt);
+    const { files, ignored, preserveChats, notes } = collected;
     let gistId = parseGistId(settings.gist) || '';
     let isPublic = options.publicGist === true;
     let description = settings.gistDescription;
@@ -81,6 +83,7 @@ export async function upload(app: App, options: RunOptions = {}): Promise<void> 
         removed: [],
         failed: [],
         hasToken: true,
+        notes,
       });
       void vscode.window.showInformationMessage(`Settings Sync created Gist ${gistId}.`);
       return;
@@ -92,14 +95,15 @@ export async function upload(app: App, options: RunOptions = {}): Promise<void> 
       throw new Error(`This Gist belongs to ${existing.ownerLogin}.`);
     }
     isPublic = existing.public;
-    if (!hasChanges(existing, files) && !settings.forceUpload) {
-      void vscode.window.setStatusBarMessage('Settings Sync: the Gist already matches these files.', 5000);
+    if (!hasChanges(existing, files, preserveChats) && !settings.forceUpload) {
+      if (notes.length > 0) void vscode.window.showWarningMessage(`Settings Sync: ${notes[0]}`);
+      else void vscode.window.setStatusBarMessage('Settings Sync: the Gist already matches these files.', 5000);
       return;
     }
     if (!settings.forceUpload && !(await confirmUpload(existing, local))) return;
 
     void vscode.window.setStatusBarMessage('Settings Sync: uploading.', 3000);
-    await client.updateGist(gistId, updatePayload(existing, files));
+    await client.updateGist(gistId, updatePayload(existing, files, preserveChats));
     await rememberSync(app, local, uploadedAt, uploadedAt);
     report(settings, {
       upload: true,
@@ -111,6 +115,7 @@ export async function upload(app: App, options: RunOptions = {}): Promise<void> 
       removed: [],
       failed: [],
       hasToken: true,
+      notes,
     });
   });
 }
@@ -141,6 +146,13 @@ export async function download(app: App, options: RunOptions = {}): Promise<void
     }
 
     const planned = await planWrites(app.userFolder, existing, local, settings);
+    const notes: string[] = [];
+    let chatsApplied = 0;
+    if (settings.syncChats && vscode.env.appName === 'Cursor' && Object.keys(planned.chats).length > 0) {
+      const imported = await importChats(app.userFolder, planned.chats);
+      notes.push(...imported.notes);
+      chatsApplied = imported.applied;
+    }
     for (const file of planned.writes) {
       if (file.custom) await writeExact(file.target, file.content);
       else await writeInside(app.userFolder, file.target, file.content);
@@ -184,9 +196,16 @@ export async function download(app: App, options: RunOptions = {}): Promise<void
       removed,
       failed,
       hasToken: activeToken !== '',
+      notes,
     });
-    if (installed.length > 0 || removed.length > 0) {
-      const reload = await vscode.window.showInformationMessage('Extension changes may need a reload.', 'Reload');
+    const reloadForExtensions = installed.length > 0 || removed.length > 0;
+    if (chatsApplied > 0 || reloadForExtensions) {
+      const message = chatsApplied > 0 && reloadForExtensions
+        ? 'Reload the window to see synced chats and extension changes.'
+        : chatsApplied > 0
+          ? 'Reload the window to see synced chats.'
+          : 'Extension changes may need a reload.';
+      const reload = await vscode.window.showInformationMessage(message, 'Reload');
       if (reload === 'Reload') await vscode.commands.executeCommand('workbench.action.reloadWindow');
     }
   });
@@ -270,7 +289,7 @@ function armWatcher(app: App): void {
     stopWatching();
     return;
   }
-  watchUploads(app, settings.autoUploadDelay, (current) => upload(current, { quietIfBusy: true }));
+  watchUploads(app, settings.autoUploadDelay, (current) => upload(current, { quietIfBusy: true }), settings.syncChats);
 }
 
 async function collectFiles(
@@ -278,9 +297,11 @@ async function collectFiles(
   local: LocalSettings,
   settings: SyncSettings,
   uploadedAt: string
-): Promise<{ files: SyncFile[]; ignored: string[] }> {
+): Promise<{ files: SyncFile[]; ignored: string[]; preserveChats: boolean; notes: string[] }> {
   const files: SyncFile[] = [];
   const ignored: string[] = [];
+  const notes: string[] = [];
+  let preserveChats = true;
   if (settings.syncExtensions) {
     const extensions = listLocalExtensions().filter((extension) => {
       const id = `${extension.publisher}.${extension.name}`;
@@ -324,6 +345,22 @@ async function collectFiles(
     });
   }
 
+  if (settings.syncChats && vscode.env.appName === 'Cursor') {
+    const exported = await exportChats(app.userFolder);
+    notes.push(...exported.notes);
+    preserveChats = exported.preserve;
+    for (const file of exported.files) {
+      if (file.content.length > 1_000_000) continue;
+      files.push({
+        fileName: file.gistName,
+        gistName: file.gistName,
+        content: file.content,
+        absolutePath: null,
+      });
+    }
+    if (exported.files.length > 0 && files.every((file) => !isChatChunkName(file.gistName))) preserveChats = true;
+  }
+
   const version = typeof app.context.extension.packageJSON.version === 'string' ? app.context.extension.packageJSON.version : '1.0.0';
   files.push({
     fileName: FILES.cloud,
@@ -331,7 +368,7 @@ async function collectFiles(
     content: JSON.stringify({ lastUpload: uploadedAt, extensionVersion: `v${version}` }),
     absolutePath: null,
   });
-  return { files, ignored };
+  return { files, ignored, preserveChats, notes };
 }
 
 async function planWrites(
@@ -339,9 +376,10 @@ async function planWrites(
   gist: RemoteGist,
   local: LocalSettings,
   settings: SyncSettings
-): Promise<{ writes: Array<{ fileName: string; gistName: string; target: string; content: string; custom: boolean }>; extensions: string | null; rejected: string[] }> {
+): Promise<{ writes: Array<{ fileName: string; gistName: string; target: string; content: string; custom: boolean }>; extensions: string | null; rejected: string[]; chats: Record<string, string> }> {
   const writes: Array<{ fileName: string; gistName: string; target: string; content: string; custom: boolean }> = [];
   const rejected: string[] = [];
+  const chats: Record<string, string> = {};
   const os = currentOs();
   let extensions: string | null = null;
 
@@ -349,6 +387,10 @@ async function planWrites(
     if (gistName === FILES.cloud) continue;
     if (gistName === FILES.extensions) {
       extensions = file.content;
+      continue;
+    }
+    if (isChatChunkName(gistName)) {
+      if (settings.syncChats) chats[gistName] = file.content;
       continue;
     }
     const keybinding = gistName === FILES.keybindings || gistName === FILES.keybindingsMac;
@@ -377,7 +419,7 @@ async function planWrites(
     });
   }
 
-  return { writes, extensions, rejected };
+  return { writes, extensions, rejected, chats };
 }
 
 function takeKeybinding(gistName: string, os: OsType, universal: boolean): boolean {
@@ -394,20 +436,26 @@ function gistPayload(files: SyncFile[]): Record<string, { content: string }> {
   return payload;
 }
 
-function updatePayload(existing: RemoteGist, files: SyncFile[]): Record<string, { content: string } | null> {
+function updatePayload(existing: RemoteGist, files: SyncFile[], preserveChats: boolean): Record<string, { content: string } | null> {
   const payload: Record<string, { content: string } | null> = gistPayload(files);
   for (const name of Object.keys(existing.files)) {
-    if (!payload[name] && !name.startsWith('keybindings')) payload[name] = null;
+    if (payload[name] || name.startsWith('keybindings')) continue;
+    if (preserveChats && isChatChunkName(name)) continue;
+    payload[name] = null;
   }
   return payload;
 }
 
-function hasChanges(existing: RemoteGist, files: SyncFile[]): boolean {
+function hasChanges(existing: RemoteGist, files: SyncFile[], preserveChats: boolean): boolean {
   const next = new Map(files.filter((file) => file.gistName !== FILES.cloud && file.content).map((file) => [file.gistName, file.content]));
   for (const [name, content] of next) {
     if (existing.files[name]?.content !== content) return true;
   }
-  return Object.keys(existing.files).some((name) => name !== FILES.cloud && !name.startsWith('keybindings') && !next.has(name));
+  return Object.keys(existing.files).some((name) => {
+    if (name === FILES.cloud || name.startsWith('keybindings') || next.has(name)) return false;
+    if (preserveChats && isChatChunkName(name)) return false;
+    return true;
+  });
 }
 
 async function confirmUpload(existing: RemoteGist, local: LocalSettings): Promise<boolean> {
@@ -598,13 +646,13 @@ async function importCustomFile(app: App): Promise<void> {
   void vscode.window.showInformationMessage(`Wrote ${target}.`);
 }
 
-async function toggle(app: App, key: 'autoUpload' | 'autoDownload' | 'forceUpload' | 'forceDownload' | 'quietSync', on: string, off: string): Promise<void> {
+async function toggle(app: App, key: ToggleKey, on: string, off: string): Promise<void> {
   const settings = readSettings();
   const next = !settings[key];
   await updateSettings({ [key]: next });
   void vscode.window.showInformationMessage(next ? on : off);
-  if (key === 'autoUpload') {
-    if (next) armWatcher(app);
+  if (key === 'autoUpload' || key === 'syncChats') {
+    if (readSettings().autoUpload) armWatcher(app);
     else stopWatching();
   }
 }

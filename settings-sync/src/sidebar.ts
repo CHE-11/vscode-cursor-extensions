@@ -6,7 +6,14 @@ import { isPlausibleToken, parseGistId, type LocalSettings } from './safe';
 import { readLocal, readSettings, type SyncSettings } from './settings';
 import { getToken } from './token';
 
-type GroupId = 'status' | 'sync' | 'setup';
+type GroupId = 'sync' | 'setup';
+
+interface SideText {
+  token: string;
+  gist: string;
+  upload: string;
+  download: string;
+}
 
 export class SyncNode extends vscode.TreeItem {
   constructor(
@@ -50,19 +57,17 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
       return [
         new SyncNode('Sync', 'sync', vscode.TreeItemCollapsibleState.Expanded),
         this.spacer('spacer-sync'),
-        new SyncNode('Status', 'status', vscode.TreeItemCollapsibleState.Expanded),
-        this.spacer('spacer-status'),
         new SyncNode('Setup', 'setup', vscode.TreeItemCollapsibleState.Expanded),
       ];
     }
-    if (element.groupId === 'status') return this.statusItems();
-    if (element.groupId === 'sync') return syncActions.map((action) => this.actionItem(action, readSettings()));
-    if (element.groupId === 'setup') return optionActions.map((action) => this.actionItem(action, readSettings()));
-    return [];
+    if (element.groupId !== 'sync' && element.groupId !== 'setup') return [];
+    const settings = readSettings();
+    const detail = await this.sideText(settings);
+    const actions = element.groupId === 'sync' ? syncActions : optionActions;
+    return actions.map((action) => this.actionItem(action, settings, detail));
   }
 
-  private async statusItems(): Promise<SyncNode[]> {
-    const settings = readSettings();
+  private async sideText(settings: SyncSettings): Promise<SideText> {
     const token = await getToken(this.app.context);
     let local: LocalSettings | undefined;
     try {
@@ -70,24 +75,32 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
     } catch {
       local = undefined;
     }
-    const gist = parseGistId(settings.gist);
-    return [
-      this.stat('Token', isPlausibleToken(token) ? 'Saved' : 'Not set', 'key'),
-      this.stat('Gist', gist ?? 'Not set', 'github'),
-      this.stat('Last upload', local ? formatWhen(local.lastUpload) : 'Unavailable', 'cloud-upload'),
-      this.stat('Last download', local ? formatWhen(local.lastDownload) : 'Unavailable', 'cloud-download'),
-      this.stat('Public Gist download', onOff(settings.downloadPublicGist), 'globe'),
-      this.stat('Sync extensions', onOff(settings.syncExtensions), 'extensions'),
-      this.stat('GitHub host', settings.githubEnterpriseUrl || 'github.com', 'server'),
-    ];
+    return {
+      token: isPlausibleToken(token) ? 'Saved' : 'Not set',
+      gist: parseGistId(settings.gist) ?? 'Not set',
+      upload: local ? formatWhen(local.lastUpload) : 'Unavailable',
+      download: local ? formatWhen(local.lastDownload) : 'Unavailable',
+    };
   }
 
-  private actionItem(action: SyncAction, settings: SyncSettings): SyncNode {
+  private actionItem(action: SyncAction, settings: SyncSettings, detail: SideText): SyncNode {
     const item = new SyncNode(action.label, undefined, vscode.TreeItemCollapsibleState.None, action);
     if (action.toggle) {
       const enabled = settings[action.toggle] === true;
       item.description = onOff(enabled);
       item.iconPath = new vscode.ThemeIcon(enabled ? 'pass-filled' : 'circle-large');
+    } else if (action.id === 'setToken') {
+      item.description = detail.token;
+      item.tooltip = `Token: ${detail.token}`;
+    } else if (action.id === 'chooseGist') {
+      item.description = detail.gist;
+      item.tooltip = `Gist: ${detail.gist}`;
+    } else if (action.id === 'upload') {
+      item.description = detail.upload;
+      item.tooltip = `Last upload: ${detail.upload}`;
+    } else if (action.id === 'download') {
+      item.description = detail.download;
+      item.tooltip = `Last download: ${detail.download}`;
     }
     return item;
   }
@@ -97,15 +110,6 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
     item.id = id;
     item.contextValue = 'spacer';
     item.tooltip = '';
-    return item;
-  }
-
-  private stat(label: string, value: string, icon: string): SyncNode {
-    const item = new SyncNode(label, undefined, vscode.TreeItemCollapsibleState.None);
-    item.description = value;
-    item.tooltip = `${label}: ${value}`;
-    item.iconPath = new vscode.ThemeIcon(icon);
-    item.contextValue = 'stat';
     return item;
   }
 }

@@ -1,4 +1,4 @@
-export type ToggleKey = 'autoUpload' | 'autoDownload' | 'forceUpload' | 'forceDownload' | 'quietSync';
+export type ToggleKey = 'autoUpload' | 'autoDownload' | 'forceUpload' | 'forceDownload' | 'quietSync' | 'syncChats';
 
 export interface SyncAction {
   id: 'upload' | 'download' | ToggleKey | 'setToken' | 'chooseGist' | 'editLocal' | 'openSettings' | 'downloadPublic' | 'sharePublic' | 'addCustomFile' | 'importCustomFile' | 'how' | 'reset';
@@ -29,6 +29,7 @@ export const optionActions: SyncAction[] = [
   { id: 'forceUpload', label: 'Toggle Force Upload', icon: 'sync', inOptions: true, toggle: 'forceUpload', on: 'Force upload is on.', off: 'Force upload is off.' },
   { id: 'forceDownload', label: 'Toggle Force Download', icon: 'sync', inOptions: true, toggle: 'forceDownload', on: 'Force download is on.', off: 'Force download is off.' },
   { id: 'quietSync', label: 'Toggle Quiet Summary', icon: 'sync', inOptions: true, toggle: 'quietSync', on: 'Quiet summary is on.', off: 'Quiet summary is off.' },
+  { id: 'syncChats', label: 'Toggle Chat Sync', icon: 'comment-discussion', inOptions: true, toggle: 'syncChats', on: 'Chat sync is on. The newest chats that fit are included.', off: 'Chat sync is off.' },
   { id: 'how', label: 'How to Configure', icon: 'question', inOptions: false },
   { id: 'reset', label: 'Reset', icon: 'trash', inOptions: false },
 ];

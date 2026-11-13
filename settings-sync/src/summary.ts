@@ -14,10 +14,12 @@ export function showSummary(options: {
   installed: string[];
   removed: string[];
   failed: string[];
+  notes?: string[];
 }): void {
   const action = options.upload ? 'Upload' : 'Download';
   if (options.quiet) {
-    void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.`, 5000);
+    const suffix = options.notes && options.notes.length > 0 ? ` ${options.notes[0]}` : '';
+    void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.${suffix}`, 8000);
     return;
   }
 
@@ -44,6 +46,11 @@ export function showSummary(options: {
     channel.appendLine('');
     channel.appendLine('Extension changes that failed:');
     appendIds(options.failed, '');
+  }
+  if (options.notes && options.notes.length > 0) {
+    channel.appendLine('');
+    channel.appendLine('Chat sync:');
+    options.notes.forEach((note) => channel?.appendLine(`  ${note}`));
   }
   channel.appendLine('--------------------');
   channel.appendLine('Done.');

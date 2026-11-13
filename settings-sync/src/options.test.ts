@@ -16,6 +16,7 @@ const optionLabels = [
   'Toggle Force Upload',
   'Toggle Force Download',
   'Toggle Quiet Summary',
+  'Toggle Chat Sync',
 ];
 
 test('the options menu and the sidebar list the same setup actions', () => {

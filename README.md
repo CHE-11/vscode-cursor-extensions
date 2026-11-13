@@ -16,7 +16,7 @@ Adds tab-menu commands to close unchanged files, diff editors, tabs to the left,
 Runs the active file, or the current selection, from a play button in the editor title. The sidebar edits the program used for each language, extension, and filename glob.
 
 ## [settings-sync](./settings-sync)
-Syncs settings, keybindings, snippets, launch config, and extensions through a GitHub Gist. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
+Syncs settings, keybindings, snippets, launch config, extensions, and Cursor agent chats through a GitHub Gist. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
 
 ## [endpointer](./endpointer)
 Jump from a frontend API call to the matching backend route in a monorepo. It indexes routes and frontend calls, lists them in a sidebar, and lets you paste endpoint templates that link the two sides together.

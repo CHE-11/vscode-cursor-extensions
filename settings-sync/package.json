@@ -1,8 +1,8 @@
 {
   "name": "ce-settings-sync",
   "displayName": "CE | Settings Sync",
-  "description": "Sync settings, keybindings, snippets, and extensions through a GitHub Gist.",
-  "version": "1.0.5",
+  "description": "Sync settings, keybindings, snippets, extensions, and Cursor chats through a GitHub Gist.",
+  "version": "1.0.8",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",
@@ -24,7 +24,9 @@
     "gist",
     "github",
     "keybindings",
-    "snippets"
+    "snippets",
+    "cursor",
+    "chat"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -149,6 +151,11 @@
           "type": "boolean",
           "default": true,
           "description": "Include extensions in upload and download."
+        },
+        "settings-sync.syncChats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Cursor agent chat history in upload and download. The newest chats that fit in 8 MB are stored in the same Gist. Reload the window after a download to see them."
         },
         "settings-sync.githubEnterpriseUrl": {
           "type": "string",

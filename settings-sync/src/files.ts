@@ -1,5 +1,6 @@
 import { lstat, mkdir, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
+import { isChatChunkName } from './chats';
 import {
   CUSTOM_PREFIX,
   FILES,
@@ -52,6 +53,7 @@ export async function writeExact(target: string, content: string): Promise<void>
 }
 
 export function downloadTarget(userFolder: string, gistName: string, customFiles: Record<string, string>): string | null {
+  if (isChatChunkName(gistName)) return null;
   if (gistName.startsWith(CUSTOM_PREFIX)) {
     const name = gistName.slice(CUSTOM_PREFIX.length);
     return customFiles[name] ? customFileTarget(customFiles[name]) : null;
