@@ -5,6 +5,7 @@
 - Upload and download sync the newest Cursor agent chats that fit in the Gist, and merge them into the local chat database.
 - Chat text is stored in the same Gist as settings. Reload the window after a download to see it.
 - The sidebar no longer has a Status section. Token, Gist id, and the last upload and download times sit beside those actions.
+- A finished sync reports on the status bar and leaves the panel closed. The full summary stays in the Settings Sync output channel.
 
 ## 1.0.3
 

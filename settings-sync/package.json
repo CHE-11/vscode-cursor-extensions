@@ -2,7 +2,7 @@
   "name": "ce-settings-sync",
   "displayName": "CE | Settings Sync",
   "description": "Sync settings, keybindings, snippets, extensions, and Cursor chats through a GitHub Gist.",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",

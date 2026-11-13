@@ -54,7 +54,7 @@ export function showSummary(options: {
   }
   channel.appendLine('--------------------');
   channel.appendLine('Done.');
-  channel.show(true);
+  void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.`, 5000);
 }
 
 function appendIds(ids: string[], empty: string): void {
