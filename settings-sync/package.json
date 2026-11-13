@@ -1,0 +1,204 @@
+{
+  "name": "ce-settings-sync",
+  "displayName": "CE | Settings Sync",
+  "description": "Sync settings, keybindings, snippets, and extensions through a GitHub Gist.",
+  "version": "1.0.5",
+  "license": "MIT",
+  "publisher": "che-11",
+  "author": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "settings-sync"
+  },
+  "icon": "images/logo-128.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "settings",
+    "sync",
+    "gist",
+    "github",
+    "keybindings",
+    "snippets"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:settings-sync.sidebar"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "settings-sync.upload",
+        "title": "Upload Settings",
+        "category": "Settings Sync"
+      },
+      {
+        "command": "settings-sync.download",
+        "title": "Download Settings",
+        "category": "Settings Sync"
+      },
+      {
+        "command": "settings-sync.reset",
+        "title": "Reset",
+        "category": "Settings Sync"
+      },
+      {
+        "command": "settings-sync.how",
+        "title": "How to Configure",
+        "category": "Settings Sync"
+      },
+      {
+        "command": "settings-sync.options",
+        "title": "Options",
+        "category": "Settings Sync"
+      },
+      {
+        "command": "settings-sync.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Settings Sync"
+      }
+    ],
+    "keybindings": [
+      {
+        "key": "alt+shift+u",
+        "command": "settings-sync.upload"
+      },
+      {
+        "key": "alt+shift+d",
+        "command": "settings-sync.download"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "settings-sync",
+          "title": "Settings Sync",
+          "icon": "images/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "settings-sync": [
+        {
+          "id": "settings-sync.sidebar",
+          "name": "Settings Sync",
+          "contextualTitle": "Settings Sync"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "settings-sync.refresh",
+          "when": "view == settings-sync.sidebar",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Settings Sync",
+      "properties": {
+        "settings-sync.gist": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub Gist id that stores the synced settings."
+        },
+        "settings-sync.autoDownload": {
+          "type": "boolean",
+          "default": false,
+          "description": "Download files when the editor starts. Extensions are not changed."
+        },
+        "settings-sync.autoUpload": {
+          "type": "boolean",
+          "default": false,
+          "description": "Upload after a settings file or extension changes."
+        },
+        "settings-sync.forceDownload": {
+          "type": "boolean",
+          "default": false,
+          "description": "Download even when the last sync times match."
+        },
+        "settings-sync.forceUpload": {
+          "type": "boolean",
+          "default": false,
+          "description": "Upload even when the Gist is unchanged or newer."
+        },
+        "settings-sync.quietSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Report the result on the status bar instead of the output channel."
+        },
+        "settings-sync.removeExtensions": {
+          "type": "boolean",
+          "default": false,
+          "description": "When downloading, offer to uninstall extensions that are not in the Gist. Nothing is removed until you confirm."
+        },
+        "settings-sync.syncExtensions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include extensions in upload and download."
+        },
+        "settings-sync.githubEnterpriseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "https URL of a GitHub Enterprise server. Leave empty for github.com."
+        },
+        "settings-sync.downloadPublicGist": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow download without a token. The Gist must be public."
+        },
+        "settings-sync.hostName": {
+          "type": "string",
+          "default": "",
+          "description": "Host name used by @sync host= pragmas."
+        },
+        "settings-sync.universalKeybindings": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use one keybindings file on every operating system."
+        },
+        "settings-sync.autoUploadDelay": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Seconds to wait after a change before an automatic upload."
+        },
+        "settings-sync.askGistDescription": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ask for a description when creating a Gist."
+        },
+        "settings-sync.gistDescription": {
+          "type": "string",
+          "default": "Visual Studio Code Settings Sync Gist",
+          "description": "Description used when creating a Gist."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/**/*.test.js",
+    "package": "node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}
