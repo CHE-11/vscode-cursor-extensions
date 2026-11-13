@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,11 +27,7 @@ for (const file of vsixFiles) {
   const vsixPath = join(buildsDir, file);
   console.log(`Installing: ${file}`);
   try {
-    execFileSync(cli, ['--install-extension', vsixPath, '--force'], {
-      cwd: repoRoot,
-      stdio: 'inherit',
-      shell: true,
-    });
+    installExtension(cli, vsixPath);
   } catch (error) {
     failures.push(file);
     console.error(`Failed to install ${file}: ${error.message}`);
@@ -44,6 +40,36 @@ if (failures.length > 0) {
 }
 
 console.log(`Installed ${vsixFiles.length} extensions with ${cli}.`);
+
+function installExtension(cli, vsixPath) {
+  const result = spawnSync(cli, ['--install-extension', vsixPath, '--force'], {
+    cwd: repoRoot,
+    shell: true,
+    env: extensionCliEnv(),
+    encoding: 'utf8',
+  });
+  const output = filterInstallLog(result.stdout);
+  if (output) console.log(output);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(filterInstallLog(result.stderr) || `exit code ${result.status}`);
+  }
+}
+
+function filterInstallLog(text) {
+  return (text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !/^Installing extensions(\s+on .+)?\.\.\.$/.test(line))
+    .join('\n');
+}
+
+function extensionCliEnv() {
+  const flag = '--disable-warning=DEP0169';
+  const flags = (process.env.NODE_OPTIONS ?? '').split(/\s+/).filter(Boolean);
+  if (!flags.includes(flag)) flags.push(flag);
+  return { ...process.env, NODE_OPTIONS: flags.join(' ') };
+}
 
 function findCli() {
   for (const command of ['cursor', 'code']) {
