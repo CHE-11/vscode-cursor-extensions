@@ -6,8 +6,12 @@ import { requestRefresh } from './refresh';
 
 const SECTION = 'settings-sync';
 
+export type SyncLocation = 'gist' | 'folder';
+
 export interface SyncSettings {
   gist: string;
+  location: SyncLocation;
+  folder: string;
   autoDownload: boolean;
   autoUpload: boolean;
   forceDownload: boolean;
@@ -27,6 +31,8 @@ export interface SyncSettings {
 
 const SETTING_KEYS: Array<keyof SyncSettings> = [
   'gist',
+  'location',
+  'folder',
   'autoDownload',
   'autoUpload',
   'forceDownload',
@@ -49,6 +55,8 @@ export function readSettings(): SyncSettings {
   const delay = config.get<number>('autoUploadDelay') ?? 20;
   return {
     gist: (config.get<string>('gist') || '').trim(),
+    location: config.get<string>('location') === 'folder' ? 'folder' : 'gist',
+    folder: (config.get<string>('folder') || '').trim(),
     autoDownload: config.get<boolean>('autoDownload') === true,
     autoUpload: config.get<boolean>('autoUpload') === true,
     forceDownload: config.get<boolean>('forceDownload') === true,

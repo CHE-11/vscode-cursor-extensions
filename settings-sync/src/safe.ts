@@ -31,6 +31,14 @@ const DEFAULT_IGNORE_FILES = [
 
 const DEFAULT_IGNORE_FOLDERS = ['workspaceStorage', 'globalStorage', 'History'];
 
+export const CHAT_COUNT_RANGE = { min: 1, max: 100, fallback: 15 };
+export const MESSAGE_COUNT_RANGE = { min: 1, max: 200, fallback: 30 };
+
+export function clampCount(value: unknown, range: { min: number; max: number; fallback: number }): number {
+  const parsed = typeof value === 'number' && Number.isInteger(value) ? value : range.fallback;
+  return Math.min(Math.max(parsed, range.min), range.max);
+}
+
 export interface LocalSettings {
   ignoreUploadFiles: string[];
   ignoreUploadFolders: string[];
@@ -39,6 +47,8 @@ export interface LocalSettings {
   customFiles: Record<string, string>;
   lastUpload: string | null;
   lastDownload: string | null;
+  chatCount: number;
+  messageCount: number;
 }
 
 export function defaultLocalSettings(): LocalSettings {
@@ -50,6 +60,8 @@ export function defaultLocalSettings(): LocalSettings {
     customFiles: {},
     lastUpload: null,
     lastDownload: null,
+    chatCount: CHAT_COUNT_RANGE.fallback,
+    messageCount: MESSAGE_COUNT_RANGE.fallback,
   };
 }
 
@@ -61,6 +73,8 @@ export function normalizeLocal(raw: unknown): { settings: LocalSettings; legacyT
   const ignoreUploadFolders = mergeStrings(record.ignoreUploadFolders, defaults.ignoreUploadFolders);
   const ignoreExtensions = stringArray(record.ignoreExtensions);
   const supported = stringArray(record.supportedFileExtensions);
+  const chatCount = clampCount(record.chatCount, CHAT_COUNT_RANGE);
+  const messageCount = clampCount(record.messageCount, MESSAGE_COUNT_RANGE);
   const settings: LocalSettings = {
     ignoreUploadFiles,
     ignoreUploadFolders,
@@ -69,9 +83,13 @@ export function normalizeLocal(raw: unknown): { settings: LocalSettings; legacyT
     customFiles: stringMap(record.customFiles),
     lastUpload: dateString(record.lastUpload),
     lastDownload: dateString(record.lastDownload),
+    chatCount,
+    messageCount,
   };
   const changed =
     legacyToken.length > 0 ||
+    record.chatCount !== chatCount ||
+    record.messageCount !== messageCount ||
     defaults.ignoreUploadFiles.some((name) => !stringArray(record.ignoreUploadFiles).includes(name)) ||
     defaults.ignoreUploadFolders.some((name) => !stringArray(record.ignoreUploadFolders).includes(name));
   return { settings, legacyToken, changed: raw === undefined ? false : changed };

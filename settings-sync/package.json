@@ -1,8 +1,8 @@
 {
   "name": "ce-settings-sync",
   "displayName": "CE | Settings Sync",
-  "description": "Sync settings, keybindings, snippets, extensions, and Cursor chats through a GitHub Gist.",
-  "version": "1.0.11",
+  "description": "Sync settings, keybindings, snippets, extensions, and Cursor chats through a GitHub Gist or a local folder.",
+  "version": "1.0.15",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",
@@ -127,6 +127,24 @@
           "default": "",
           "description": "GitHub Gist id that stores the synced settings."
         },
+        "settings-sync.location": {
+          "type": "string",
+          "enum": [
+            "gist",
+            "folder"
+          ],
+          "enumDescriptions": [
+            "Sync through a GitHub Gist.",
+            "Sync through a JSON file in a local folder."
+          ],
+          "default": "gist",
+          "description": "Where settings are stored. Only the active location is uploaded and downloaded."
+        },
+        "settings-sync.folder": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path of the folder that stores settings-sync.json. Used when the sync location is a folder."
+        },
         "settings-sync.autoDownload": {
           "type": "boolean",
           "default": false,
@@ -165,7 +183,7 @@
         "settings-sync.syncChats": {
           "type": "boolean",
           "default": true,
-          "description": "Include Cursor agent chat history in upload and download. The 10 newest chats are stored in the same Gist, with the last 5 messages of each. Reload the window after a download to see them."
+          "description": "Include Cursor agent chat history in upload and download. Reload the window after a download to see them."
         },
         "settings-sync.githubEnterpriseUrl": {
           "type": "string",

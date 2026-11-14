@@ -1,7 +1,9 @@
+import type { SyncLocation } from './settings';
+
 export type ToggleKey = 'autoUpload' | 'autoDownload' | 'forceUpload' | 'forceDownload' | 'quietSync' | 'syncChats';
 
 export interface SyncAction {
-  id: 'upload' | 'download' | 'clearAndUpload' | 'viewLogs' | ToggleKey | 'setToken' | 'chooseGist' | 'editLocal' | 'openSettings' | 'downloadPublic' | 'sharePublic' | 'addCustomFile' | 'importCustomFile' | 'how' | 'reset';
+  id: 'upload' | 'download' | 'clearAndUpload' | 'viewLogs' | ToggleKey | 'syncLocation' | 'setToken' | 'chooseGist' | 'editLocal' | 'openSettings' | 'downloadPublic' | 'sharePublic' | 'addCustomFile' | 'importCustomFile' | 'chatCount' | 'messageCount' | 'how' | 'reset';
   label: string;
   icon: string;
   inOptions: boolean;
@@ -9,6 +11,8 @@ export interface SyncAction {
   on?: string;
   off?: string;
 }
+
+const GIST_ONLY = new Set<SyncAction['id']>(['setToken', 'chooseGist', 'downloadPublic', 'sharePublic']);
 
 export const syncActions: SyncAction[] = [
   { id: 'upload', label: 'Upload', icon: 'cloud-upload', inOptions: false },
@@ -18,6 +22,7 @@ export const syncActions: SyncAction[] = [
 ];
 
 export const optionActions: SyncAction[] = [
+  { id: 'syncLocation', label: 'Sync Location', icon: 'folder', inOptions: true },
   { id: 'setToken', label: 'Set GitHub Token', icon: 'key', inOptions: true },
   { id: 'chooseGist', label: 'Choose Gist', icon: 'github', inOptions: true },
   { id: 'editLocal', label: 'Edit Local Settings', icon: 'json', inOptions: true },
@@ -31,11 +36,18 @@ export const optionActions: SyncAction[] = [
   { id: 'forceUpload', label: 'Toggle Force Upload', icon: 'sync', inOptions: true, toggle: 'forceUpload', on: 'Force upload is on.', off: 'Force upload is off.' },
   { id: 'forceDownload', label: 'Toggle Force Download', icon: 'sync', inOptions: true, toggle: 'forceDownload', on: 'Force download is on.', off: 'Force download is off.' },
   { id: 'quietSync', label: 'Toggle Quiet Summary', icon: 'sync', inOptions: true, toggle: 'quietSync', on: 'Quiet summary is on.', off: 'Quiet summary is off.' },
-  { id: 'syncChats', label: 'Toggle Chat Sync', icon: 'comment-discussion', inOptions: true, toggle: 'syncChats', on: 'Chat sync is on. The 10 newest chats are included, with the last 5 messages of each.', off: 'Chat sync is off.' },
+  { id: 'syncChats', label: 'Toggle Chat Sync', icon: 'comment-discussion', inOptions: true, toggle: 'syncChats', on: 'Chat sync is on.', off: 'Chat sync is off.' },
+  { id: 'chatCount', label: 'Chat Cap', icon: 'list-ordered', inOptions: true },
+  { id: 'messageCount', label: 'Per Chat Message Cap', icon: 'comment', inOptions: true },
   { id: 'how', label: 'How to Configure', icon: 'question', inOptions: false },
   { id: 'reset', label: 'Reset', icon: 'trash', inOptions: false },
 ];
 
 export function optionsMenu(): SyncAction[] {
   return optionActions.filter((action) => action.inOptions);
+}
+
+export function actionsFor(location: SyncLocation, actions: SyncAction[]): SyncAction[] {
+  if (location !== 'folder') return actions;
+  return actions.filter((action) => !GIST_ONLY.has(action.id));
 }

@@ -8,8 +8,8 @@ export const CHAT_PREFIX = 'chats|';
 export const CHAT_BUDGET_BYTES = 8_000_000;
 export const CHAT_FILE_BYTES = 900_000;
 export const CHAT_VALUE_BYTES = 1_000_000;
-export const CHAT_COUNT = 10;
-export const MESSAGE_COUNT = 5;
+export const CHAT_COUNT = 15;
+export const MESSAGE_COUNT = 30;
 const CHAT_HARD_FILE_BYTES = 990_000;
 
 const LEGACY_COMPOSER = 'composer.composerData';

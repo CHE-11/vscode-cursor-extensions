@@ -6,4 +6,4 @@ Add a package.js file to the extension folder to build the extension like the ot
 
 Remove any strange dependencies, clean up the code, change author to me with a nod to the author in the README.md of the extension folder.
 
-Then add extension to the workspace README.md file.
+Then add extension to the workspace README.md file in alphabetical order based on extension display name without "CE | ".

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import type { App } from './app';
-import { optionActions, syncActions, type SyncAction } from './options';
-import { onDidRequestRefresh } from './refresh';
-import { isPlausibleToken, parseGistId, type LocalSettings } from './safe';
+import { actionsFor, optionActions, syncActions, type SyncAction } from './options';
+import { onDidRequestRefresh, syncActivity } from './refresh';
+import { CHAT_COUNT_RANGE, MESSAGE_COUNT_RANGE, isPlausibleToken, parseGistId, type LocalSettings } from './safe';
 import { readLocal, readSettings, type SyncSettings } from './settings';
 import { getToken } from './token';
 
@@ -13,6 +13,8 @@ interface SideText {
   gist: string;
   upload: string;
   download: string;
+  chatCount: number;
+  messageCount: number;
 }
 
 export class SyncNode extends vscode.TreeItem {
@@ -63,7 +65,7 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
     if (element.groupId !== 'sync' && element.groupId !== 'setup') return [];
     const settings = readSettings();
     const detail = await this.sideText(settings);
-    const actions = element.groupId === 'sync' ? syncActions : optionActions;
+    const actions = element.groupId === 'sync' ? syncActions : actionsFor(settings.location, optionActions);
     return actions.map((action) => this.actionItem(action, settings, detail));
   }
 
@@ -80,15 +82,29 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
       gist: parseGistId(settings.gist) ?? 'Not set',
       upload: local ? formatWhen(local.lastUpload) : 'Unavailable',
       download: local ? formatWhen(local.lastDownload) : 'Unavailable',
+      chatCount: local?.chatCount ?? CHAT_COUNT_RANGE.fallback,
+      messageCount: local?.messageCount ?? MESSAGE_COUNT_RANGE.fallback,
     };
   }
 
   private actionItem(action: SyncAction, settings: SyncSettings, detail: SideText): SyncNode {
     const item = new SyncNode(action.label, undefined, vscode.TreeItemCollapsibleState.None, action);
+    if (action.id === 'clearAndUpload' && settings.location === 'folder') {
+      item.label = 'Clear Folder and Reupload';
+    }
     if (action.toggle) {
       const enabled = settings[action.toggle] === true;
       item.description = onOff(enabled);
       item.iconPath = new vscode.ThemeIcon(enabled ? 'pass-filled' : 'circle-large');
+    } else if (action.id === 'chatCount') {
+      item.description = String(detail.chatCount);
+      item.tooltip = `Chat cap: ${detail.chatCount}`;
+    } else if (action.id === 'messageCount') {
+      item.description = String(detail.messageCount);
+      item.tooltip = `Messages per chat: ${detail.messageCount}`;
+    } else if (action.id === 'syncLocation') {
+      item.description = settings.location === 'folder' ? settings.folder || 'Not set' : 'Gist';
+      item.tooltip = settings.location === 'folder' ? settings.folder || 'Not set' : 'GitHub Gist';
     } else if (action.id === 'setToken') {
       item.description = detail.token;
       item.tooltip = `Token: ${detail.token}`;
@@ -96,11 +112,17 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
       item.description = detail.gist;
       item.tooltip = `Gist: ${detail.gist}`;
     } else if (action.id === 'upload') {
-      item.description = detail.upload;
-      item.tooltip = `Last upload: ${detail.upload}`;
+      if (syncActivity() === 'upload') markRunning(item, 'Uploading');
+      else {
+        item.description = detail.upload;
+        item.tooltip = `Last upload: ${detail.upload}`;
+      }
     } else if (action.id === 'download') {
-      item.description = detail.download;
-      item.tooltip = `Last download: ${detail.download}`;
+      if (syncActivity() === 'download') markRunning(item, 'Downloading');
+      else {
+        item.description = detail.download;
+        item.tooltip = `Last download: ${detail.download}`;
+      }
     }
     return item;
   }
@@ -112,6 +134,12 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
     item.tooltip = '';
     return item;
   }
+}
+
+function markRunning(item: SyncNode, label: string): void {
+  item.description = label;
+  item.iconPath = new vscode.ThemeIcon('sync~spin');
+  item.tooltip = label;
 }
 
 function onOff(enabled: boolean): string {

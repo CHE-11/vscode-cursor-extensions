@@ -1,6 +1,6 @@
 # Settings Sync
 
-Settings Sync uploads and downloads your editor settings through a GitHub Gist.
+Settings Sync uploads and downloads your editor settings through a GitHub Gist or a JSON file in a folder you choose.
 
 Maintained by che-11. The behavior comes from [settings-sync](https://github.com/shanalikhan/settings-sync) by [Shan Khan](https://github.com/shanalikhan). That project is MIT licensed, and its license is in [LICENSE](LICENSE).
 
@@ -16,9 +16,9 @@ Maintained by che-11. The behavior comes from [settings-sync](https://github.com
 
 ## Chats
 
-On Cursor, upload and download also sync agent chats. The chats are copied out of `User/globalStorage/state.vscdb` and stored in the same Gist as the settings. Upload keeps the 10 newest chats, and each chat keeps its last 5 messages. Older chats and older messages stay on the machine that has them. Message text is included. The large agent blob cache, saved file snapshots, and code-block cache are not.
+On Cursor, upload and download also sync agent chats. The chats are copied out of `User/globalStorage/state.vscdb` and stored with the settings. Upload keeps the newest chats up to the Chat Cap, and each chat keeps its latest messages up to the Per Chat Message Cap. Both default to 15 chats and 30 messages. Change them from the sidebar. They are saved in `syncLocalSettings.json`. Older chats and older messages stay on the machine that has them. Message text is included. The large agent blob cache, saved file snapshots, and code-block cache are not.
 
-Download merges chats by id. A newer copy wins, and a chat that exists only on this machine is left in place. Nothing else in `state.vscdb` is replaced. Reload the window after a download to see the merged chats. Turn this off with **Toggle Chat Sync** or `settings-sync.syncChats`.
+Download merges chats by id. A newer copy wins, and a chat that exists only on this machine is left in place. Nothing else in `state.vscdb` is replaced. Reload the window after a download to see the merged chats. Turn this off with **Toggle Chat Sync** or `settings-sync.syncChats`. **Chat Cap** and **Per Chat Message Cap** set the two limits.
 
 ## Token
 
@@ -28,13 +28,21 @@ A token that was saved by the original extension is moved into Secret Storage an
 
 Leave `settings-sync.githubEnterpriseUrl` empty for github.com. An enterprise URL must be `https`, and its API calls go to `https://your-host/api/v3`. If `http.proxy` is set, requests go through that proxy. When the proxy module is unavailable, the token is not sent.
 
+## Folder
+
+**Sync Location** chooses a GitHub Gist or a local folder. Only the active location is uploaded and downloaded. The other path stays saved.
+
+Choose a folder outside the User folder. Upload writes one `settings-sync.json` file there. A cloud-sync app such as MEGA can copy that file between computers. The extension does not talk to the cloud app, and it does not put the User folder itself in the sync folder.
+
+With auto download on, the editor also reads that file when it changes, after a short wait. A file that is still being copied is left alone until it is valid JSON. Automatic download updates files only.
+
 ## Sidebar
 
 The **Settings Sync** icon on the activity bar opens the sync view.
 
-**Sync** uploads, downloads, or clears the Gist and uploads the current settings. Upload and Download show the last time that action ran. **Clear Gist and Reupload** asks before it deletes the files in the Gist and uploads the current settings in their place. **View Sync Logs** opens the Settings Sync output channel when a summary from this session is still there.
+**Sync** uploads, downloads, or clears the active location and uploads the current settings. Upload and Download show the last time that action ran. **Clear Gist and Reupload** asks before it deletes the files in the Gist and uploads the current settings in their place. In folder mode the same command clears `settings-sync.json` and uploads the current settings. **View Sync Logs** opens the Settings Sync output channel when a summary from this session is still there. The last line is the time from the start of that sync until its write finished.
 
-**Setup** has the same actions as **Settings Sync: Options**. Set GitHub Token shows whether a token is saved, and Choose Gist shows the Gist id. The token itself is not shown. The other rows edit local settings, open settings, download a public Gist, upload to a new public Gist, add or import a custom file, and toggle auto upload, auto download, force upload, force download, the quiet summary, and chat sync. How to Configure and Reset are there too.
+**Setup** has the same actions as **Settings Sync: Options**. **Sync Location** shows Gist or the folder path. Set GitHub Token, Choose Gist, Download Public Gist, and Upload to a New Public Gist are shown for a Gist. Set GitHub Token shows whether a token is saved, and Choose Gist shows the Gist id. The token itself is not shown. The other rows edit local settings, open settings, add or import a custom file, set the chat cap and the per-chat message cap, and toggle auto upload, auto download, force upload, force download, the quiet summary, and chat sync. How to Configure and Reset are there too.
 
 ## Download
 

@@ -3,7 +3,7 @@ import type { App } from './app';
 import { resolveUserFolder } from './safe';
 import { SettingsSyncView } from './sidebar';
 import { disposeSyncLogs, viewSyncLogs } from './summary';
-import { bootstrap, clearAndUpload, download, how, openOptions, reset, runOption, upload } from './sync';
+import { armWatchers, bootstrap, clearAndUpload, download, how, openOptions, reset, runOption, upload } from './sync';
 import { migrateToken } from './token';
 import { stopWatching } from './watcher';
 
@@ -49,7 +49,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('settings-sync.refresh', refreshSidebar),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('settings-sync')) refreshSidebar();
+      if (!event.affectsConfiguration('settings-sync')) return;
+      refreshSidebar();
+      armWatchers(app);
     })
   );
 

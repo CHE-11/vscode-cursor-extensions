@@ -2,7 +2,10 @@ import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { App } from './app';
 import { readChatWatermark } from './chats';
+import { BUNDLE_NAME } from './folder';
 import { FILES } from './safe';
+
+const BUNDLE_DELAY_MS = 2000;
 
 let folderWatcher: vscode.FileSystemWatcher | undefined;
 let extensionWatcher: vscode.Disposable | undefined;
@@ -10,8 +13,12 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let chatTimer: ReturnType<typeof setInterval> | undefined;
 let upload: ((app: App) => Promise<void>) | undefined;
 
+let bundleWatcher: vscode.FileSystemWatcher | undefined;
+let bundleTimer: ReturnType<typeof setTimeout> | undefined;
+let bundleDownload: (() => Promise<void>) | undefined;
+
 export function watchUploads(app: App, delaySeconds: number, onUpload: (app: App) => Promise<void>, watchChats = false): void {
-  stopWatching();
+  stopUploadWatching();
   upload = onUpload;
   const delay = Math.min(Math.max(delaySeconds, 1), 300) * 1000;
   const pattern = new vscode.RelativePattern(app.userFolder, '**/*.{json,code-snippets}');
@@ -54,7 +61,23 @@ function watchChatWatermark(app: App, delay: number, schedule: () => void): void
   chatTimer = setInterval(poll, delay);
 }
 
-export function stopWatching(): void {
+export function watchBundle(folder: string, onDownload: () => Promise<void>): void {
+  stopFolderWatching();
+  bundleDownload = onDownload;
+  const pattern = new vscode.RelativePattern(folder, BUNDLE_NAME);
+  bundleWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+  const schedule = () => {
+    if (bundleTimer) clearTimeout(bundleTimer);
+    bundleTimer = setTimeout(() => {
+      if (bundleDownload) void bundleDownload();
+    }, BUNDLE_DELAY_MS);
+  };
+  bundleWatcher.onDidChange(schedule);
+  bundleWatcher.onDidCreate(schedule);
+  bundleWatcher.onDidDelete(schedule);
+}
+
+export function stopUploadWatching(): void {
   if (timer) clearTimeout(timer);
   timer = undefined;
   if (chatTimer) clearInterval(chatTimer);
@@ -64,4 +87,17 @@ export function stopWatching(): void {
   extensionWatcher?.dispose();
   extensionWatcher = undefined;
   upload = undefined;
+}
+
+export function stopFolderWatching(): void {
+  if (bundleTimer) clearTimeout(bundleTimer);
+  bundleTimer = undefined;
+  bundleWatcher?.dispose();
+  bundleWatcher = undefined;
+  bundleDownload = undefined;
+}
+
+export function stopWatching(): void {
+  stopUploadWatching();
+  stopFolderWatching();
 }

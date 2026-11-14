@@ -18,9 +18,6 @@ Runs the active file, or the current selection, from a play button in the editor
 ## [code-counter](./code-counter)
 Counts code, comment, and blank lines in a workspace, a folder, or the active editor. The activity bar lists those commands and the file types and globs the count walks. Based on [uctakeoff/vscode-counter](https://github.com/uctakeoff/vscode-counter).
 
-## [settings-sync](./settings-sync)
-Syncs settings, keybindings, snippets, launch config, extensions, and the 10 newest Cursor agent chats through a GitHub Gist. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
-
 ## [endpointer](./endpointer)
 Jump from a frontend API call to the matching backend route in a monorepo. It indexes routes and frontend calls, lists them in a sidebar, and lets you paste endpoint templates that link the two sides together.
 
@@ -32,6 +29,9 @@ Puts fold-level buttons on the status bar so the active editor can be collapsed 
 
 ## [make-hidden](./make-hidden)
 Hides files and folders from the explorer with context menu actions, a Hidden Items view, and saved workspaces. Based on [Devine-Davies/vs-make-hidden](https://github.com/Devine-Davies/vs-make-hidden).
+
+## [settings-sync](./settings-sync)
+Syncs settings, keybindings, snippets, launch config, extensions, and the 15 newest Cursor agent chats through a GitHub Gist or a JSON file in a local folder. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
 
 ## [speed-start](./speed-start)
 Finds folders, large files, and startup extensions that slow Cursor down, then adds the ones you pick to `.cursorignore`, `.gitignore`, or the workspace search and watcher excludes.

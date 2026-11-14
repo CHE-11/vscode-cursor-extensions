@@ -216,11 +216,12 @@ test('a newer local chat is kept and a gist cannot write other database keys', a
   rmSync(folder, { recursive: true, force: true });
 });
 
-test('export keeps the last 5 messages of the 10 newest chats', async () => {
+test('export keeps the last 30 messages of the 15 newest chats', async () => {
   const folder = tempUser();
   const db = openGlobal(folder);
-  for (let index = 1; index <= 12; index += 1) {
-    const bubbles = Array.from({ length: 8 }, (_, message) => ({
+  const messageCount = 32;
+  for (let index = 1; index <= 16; index += 1) {
+    const bubbles = Array.from({ length: messageCount }, (_, message) => ({
       id: `m${message}`,
       value: JSON.stringify({ text: `m${message}` }),
     }));
@@ -238,36 +239,30 @@ test('export keeps the last 5 messages of the 10 newest chats', async () => {
   const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
   const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
   const ids = records.flatMap((record) => (record.kind === 'header' ? [record.header.composerId] : []));
-  assert.deepEqual(ids, Array.from({ length: 10 }, (_, index) => composerId(12 - index)));
-  assert.equal(exported.synced, 10);
-  assert.equal(exported.omitted, 2);
+  assert.deepEqual(ids, Array.from({ length: 15 }, (_, index) => composerId(16 - index)));
+  assert.equal(exported.synced, 15);
+  assert.equal(exported.omitted, 1);
 
-  const newest = composerId(12);
+  const newest = composerId(16);
+  const keptIds = Array.from({ length: 30 }, (_, index) => `m${index + 2}`);
   const bubbleKeys = records.flatMap((record) => (
     record.kind === 'kv' && record.key.startsWith(`bubbleId:${newest}:`) ? [record.key.split(':').at(-1)] : []
   ));
-  assert.deepEqual(bubbleKeys, ['m3', 'm4', 'm5', 'm6', 'm7']);
+  assert.deepEqual(bubbleKeys, keptIds);
   const composer = records.find((record) => record.kind === 'kv' && record.key === `composerData:${newest}`);
   assert.equal(composer?.kind, 'kv');
   if (composer?.kind === 'kv') {
     const parsed = JSON.parse(composer.value) as { originalFileStates?: unknown; fullConversationHeadersOnly: Array<{ bubbleId: string }> };
     assert.equal(parsed.originalFileStates, undefined);
-    assert.deepEqual(parsed.fullConversationHeadersOnly.map((item) => item.bubbleId), ['m3', 'm4', 'm5', 'm6', 'm7']);
+    assert.deepEqual(parsed.fullConversationHeadersOnly.map((item) => item.bubbleId), keptIds);
   }
   rmSync(folder, { recursive: true, force: true });
 });
 
-test('messages without a conversation list keep the latest 5 by time', async () => {
+test('messages without a conversation list keep the latest 30 by time', async () => {
   const folder = tempUser();
   const db = openGlobal(folder);
-  const times = [
-    { id: 'z', createdAt: 1 },
-    { id: 'a', createdAt: 2 },
-    { id: 'm', createdAt: 3 },
-    { id: 'b', createdAt: 4 },
-    { id: 'q', createdAt: 5 },
-    { id: 'c', createdAt: 6 },
-  ];
+  const times = Array.from({ length: 32 }, (_, index) => ({ id: `m${index}`, createdAt: index + 1 }));
   insertComposer(db, NEWER, 5, {
     bubbles: times.map((item) => ({ id: item.id, value: JSON.stringify({ createdAt: item.createdAt }) })),
   });
@@ -278,7 +273,7 @@ test('messages without a conversation list keep the latest 5 by time', async () 
   const bubbleKeys = records.flatMap((record) => (
     record.kind === 'kv' && record.key.startsWith(`bubbleId:${NEWER}:`) ? [record.key.split(':').at(-1)] : []
   ));
-  assert.deepEqual(bubbleKeys, ['a', 'm', 'b', 'q', 'c']);
+  assert.deepEqual(bubbleKeys, times.slice(2).map((item) => item.id));
   rmSync(folder, { recursive: true, force: true });
 });
 
