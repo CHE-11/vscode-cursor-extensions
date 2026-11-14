@@ -8,6 +8,8 @@ export const CHAT_PREFIX = 'chats|';
 export const CHAT_BUDGET_BYTES = 8_000_000;
 export const CHAT_FILE_BYTES = 900_000;
 export const CHAT_VALUE_BYTES = 1_000_000;
+export const CHAT_COUNT = 10;
+export const MESSAGE_COUNT = 5;
 const CHAT_HARD_FILE_BYTES = 990_000;
 
 const LEGACY_COMPOSER = 'composer.composerData';
@@ -58,6 +60,8 @@ export interface ChatLimits {
   budgetBytes: number;
   fileBytes: number;
   valueBytes: number;
+  chatCount?: number;
+  messageCount?: number;
 }
 
 export interface ChatExportResult {
@@ -102,6 +106,8 @@ const defaultLimits: ChatLimits = {
   budgetBytes: CHAT_BUDGET_BYTES,
   fileBytes: CHAT_FILE_BYTES,
   valueBytes: CHAT_VALUE_BYTES,
+  chatCount: CHAT_COUNT,
+  messageCount: MESSAGE_COUNT,
 };
 
 class SqliteMissing extends Error {
@@ -178,6 +184,32 @@ export function mergeComposerData(localJson: string | null, remoteJson: string):
 
 export function mergeChatTabs(localJson: string | null, remoteJson: string): string {
   return mergeCollection(localJson, remoteJson, 'tabs', tabIdentity, tabTime);
+}
+
+export function trimComposerMessages(composerJson: string, messageLimit: number): { json: string; bubbleIds: string[] | null } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(composerJson);
+  } catch {
+    return { json: composerJson, bubbleIds: null };
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { json: composerJson, bubbleIds: null };
+  const record = parsed as Record<string, unknown>;
+  let bubbleIds: string[] | null = null;
+  if (Array.isArray(record.fullConversationHeadersOnly)) {
+    const kept = messageLimit <= 0 ? [] : record.fullConversationHeadersOnly.filter(isBubbleHeader).slice(-messageLimit);
+    record.fullConversationHeadersOnly = kept;
+    bubbleIds = kept.map((item) => item.bubbleId);
+    if (record.conversationMap && typeof record.conversationMap === 'object' && !Array.isArray(record.conversationMap)) {
+      const map = record.conversationMap as Record<string, unknown>;
+      for (const key of Object.keys(map)) {
+        if (!bubbleIds.includes(key)) delete map[key];
+      }
+    }
+  }
+  delete record.originalFileStates;
+  delete record.codeBlockData;
+  return { json: JSON.stringify(record), bubbleIds };
 }
 
 export function selectByBudget<T extends { bytes: number }>(items: T[], budget: number): { selected: T[]; omitted: number } {
@@ -313,6 +345,8 @@ export function readChatWatermark(userFolder: string): number | null {
 function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResult {
   const dbPath = globalDbPath(userFolder);
   if (!existsSync(dbPath)) return preserveResult('No Cursor chat database was found.');
+  const chatCount = limits.chatCount ?? CHAT_COUNT;
+  const messageCount = limits.messageCount ?? MESSAGE_COUNT;
   const db = openDatabase(dbPath, true);
   try {
     db.exec('PRAGMA query_only = ON');
@@ -322,9 +356,14 @@ function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResu
     const seen = new Set<string>();
     const bundles: Bundle[] = [];
     let skippedLarge = 0;
+    let olderThanLimit = 0;
     for (const header of readHeaders(db)) {
       if (header.isSubagent === 1 || seen.has(header.composerId)) continue;
-      const loaded = loadBundle(db, header, seen, limits.valueBytes);
+      if (bundles.length >= chatCount) {
+        olderThanLimit += 1;
+        continue;
+      }
+      const loaded = loadBundle(db, header, seen, limits.valueBytes, messageCount);
       skippedLarge += loaded.skippedLarge;
       if (loaded.records.length === 0) continue;
       bundles.push({ records: loaded.records, bytes: Buffer.byteLength(JSON.stringify(loaded.records)) });
@@ -335,10 +374,11 @@ function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResu
     const legacy = loadLegacy(userFolder, Math.max(0, limits.budgetBytes - used), limits.valueBytes);
     skippedLarge += legacy.skippedLarge;
     records.push(...legacy.records);
-    const omitted = packed.omitted + legacy.omitted;
+    const omittedBySize = packed.omitted + legacy.omitted;
+    const omitted = olderThanLimit + omittedBySize;
     const chunked = chunkChatRecords(records, limits.fileBytes, limits.valueBytes);
     skippedLarge += chunked.skippedLarge;
-    const notes = exportNotes(limits.budgetBytes, packed.selected.length, omitted, skippedLarge);
+    const notes = exportNotes(chatCount, messageCount, packed.selected.length, olderThanLimit, omittedBySize, skippedLarge);
     if (chunked.files.length === 0) return { ...emptyExport(), notes, skippedLarge, omitted };
     return {
       files: chunked.files,
@@ -357,19 +397,20 @@ function loadBundle(
   db: SqliteDatabase,
   header: ChatHeader,
   seen: Set<string>,
-  valueBytes: number
+  valueBytes: number,
+  messageCount: number
 ): { records: ChatRecord[]; skippedLarge: number } {
   if (seen.has(header.composerId)) return { records: [], skippedLarge: 0 };
   seen.add(header.composerId);
   if (Buffer.byteLength(header.value) > valueBytes) return { records: [], skippedLarge: 1 };
-  const kv = loadKv(db, header.composerId, valueBytes);
+  const kv = loadKv(db, header.composerId, valueBytes, messageCount);
   const records: ChatRecord[] = [{ kind: 'header', header, complete: kv.skippedLarge === 0 }, ...kv.records];
   let skippedLarge = kv.skippedLarge;
   for (const childId of subComposerIds(kv.composerJson)) {
     if (seen.has(childId)) continue;
     const child = readHeader(db, childId);
     if (!child) continue;
-    const nested = loadBundle(db, child, seen, valueBytes);
+    const nested = loadBundle(db, child, seen, valueBytes, messageCount);
     records.push(...nested.records);
     skippedLarge += nested.skippedLarge;
   }
@@ -379,31 +420,60 @@ function loadBundle(
 function loadKv(
   db: SqliteDatabase,
   composerId: string,
-  valueBytes: number
+  valueBytes: number,
+  messageCount: number
 ): { records: ChatRecord[]; skippedLarge: number; composerJson: string | null } {
   const records: ChatRecord[] = [];
   let skippedLarge = 0;
+  let bubbleIds: string[] | null = null;
   const composerKey = `composerData:${composerId}`;
   const composerRow = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(composerKey) as { value?: unknown } | undefined;
   const composerJson = composerRow ? asText(composerRow.value) : null;
   if (composerJson !== null) {
-    if (Buffer.byteLength(composerJson) > valueBytes) skippedLarge += 1;
-    else records.push({ kind: 'kv', composerId, key: composerKey, value: composerJson });
+    const trimmed = trimComposerMessages(composerJson, messageCount);
+    bubbleIds = trimmed.bubbleIds;
+    if (Buffer.byteLength(trimmed.json) > valueBytes) skippedLarge += 1;
+    else records.push({ kind: 'kv', composerId, key: composerKey, value: trimmed.json });
   }
   const bounds = prefixBounds(`bubbleId:${composerId}:`);
   const bubbles = db.prepare('SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key').all(bounds.start, bounds.end);
+  const available: Array<{ key: string; value: string }> = [];
   for (const bubble of bubbles) {
     const row = bubble as { key?: unknown; value?: unknown };
     if (typeof row.key !== 'string' || !isAllowedKv(composerId, row.key)) continue;
     const value = asText(row.value);
     if (value === null) continue;
-    if (Buffer.byteLength(value) > valueBytes) {
+    available.push({ key: row.key, value });
+  }
+  for (const bubble of selectBubbles(available, bubbleIds, messageCount)) {
+    if (Buffer.byteLength(bubble.value) > valueBytes) {
       skippedLarge += 1;
       continue;
     }
-    records.push({ kind: 'kv', composerId, key: row.key, value });
+    records.push({ kind: 'kv', composerId, key: bubble.key, value: bubble.value });
   }
   return { records, skippedLarge, composerJson };
+}
+
+function selectBubbles(
+  bubbles: Array<{ key: string; value: string }>,
+  bubbleIds: string[] | null,
+  messageLimit: number
+): Array<{ key: string; value: string }> {
+  if (messageLimit <= 0) return [];
+  if (bubbleIds) {
+    const byId = new Map<string, { key: string; value: string }>();
+    for (const bubble of bubbles) {
+      const id = bubbleIdFromKey(bubble.key);
+      if (id) byId.set(id, bubble);
+    }
+    return bubbleIds.flatMap((id) => {
+      const bubble = byId.get(id);
+      return bubble ? [bubble] : [];
+    });
+  }
+  const ordered = [...bubbles].sort((left, right) => bubbleTime(left.value) - bubbleTime(right.value) || left.key.localeCompare(right.key));
+  return ordered.slice(-messageLimit);
 }
 
 function loadLegacy(userFolder: string, budget: number, valueBytes: number): { records: ChatRecord[]; skippedLarge: number; omitted: number } {
@@ -758,6 +828,30 @@ function prefixBounds(prefix: string): { start: string; end: string } {
   return { start: prefix, end: prefix.slice(0, -1) + String.fromCharCode(code + 1) };
 }
 
+function isBubbleHeader(value: unknown): value is { bubbleId: string } {
+  return Boolean(value) && typeof value === 'object' && typeof (value as { bubbleId?: unknown }).bubbleId === 'string' && (value as { bubbleId: string }).bubbleId.length > 0;
+}
+
+function bubbleIdFromKey(key: string): string | null {
+  const parts = key.split(':');
+  if (parts.length < 3 || parts[0] !== 'bubbleId') return null;
+  return parts.slice(2).join(':');
+}
+
+function bubbleTime(value: string): number {
+  try {
+    const parsed = JSON.parse(value) as { createdAt?: unknown };
+    if (typeof parsed.createdAt === 'number' && Number.isFinite(parsed.createdAt)) return parsed.createdAt;
+    if (typeof parsed.createdAt === 'string') {
+      const parsedTime = Date.parse(parsed.createdAt);
+      if (!Number.isNaN(parsedTime)) return parsedTime;
+    }
+  } catch {
+    return 0;
+  }
+  return 0;
+}
+
 function subComposerIds(composerJson: string | null): string[] {
   if (!composerJson) return [];
   try {
@@ -862,10 +956,18 @@ function preserveResult(note: string): ChatExportResult {
   return { files: [], preserve: true, notes: note ? [note] : [], synced: 0, omitted: 0, skippedLarge: 0 };
 }
 
-function exportNotes(budget: number, synced: number, omitted: number, skippedLarge: number): string[] {
+function exportNotes(
+  chatCount: number,
+  messageCount: number,
+  synced: number,
+  olderThanLimit: number,
+  omittedBySize: number,
+  skippedLarge: number
+): string[] {
   const notes: string[] = [];
-  if (synced > 0) notes.push(`Included ${synced} chat(s) in the Gist.`);
-  if (omitted > 0) notes.push(`Uploaded the newest chats that fit in ${Math.round(budget / 1_000_000)} MB. ${omitted} older chat(s) stayed on this machine.`);
+  if (synced > 0) notes.push(`Included ${synced} chat(s), each with its last ${messageCount} message(s).`);
+  if (olderThanLimit > 0) notes.push(`Kept the ${chatCount} newest chats. ${olderThanLimit} older chat(s) stayed on this machine.`);
+  if (omittedBySize > 0) notes.push(`${omittedBySize} chat(s) did not fit in the upload and stayed on this machine.`);
   if (skippedLarge > 0) notes.push(`Skipped ${skippedLarge} chat value(s) larger than 1 MB.`);
   return notes;
 }

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
+  CHAT_COUNT,
   chunkChatRecords,
   exportChats,
   importChats,
@@ -12,9 +13,11 @@ import {
   matchWorkspace,
   mergeChatTabs,
   mergeComposerData,
+  MESSAGE_COUNT,
   normalizeFolder,
   remapHeaderValue,
   selectByBudget,
+  trimComposerMessages,
   type ChatRecord,
 } from './chats';
 import { downloadTarget } from './files';
@@ -71,6 +74,33 @@ test('chunks stay under the file cap and a value over 1 MB is skipped', () => {
   const skipped = chunkChatRecords([huge], 900_000, 1_000_000);
   assert.equal(skipped.files.length, 0);
   assert.equal(skipped.skippedLarge, 1);
+});
+
+test('a chat keeps its last 5 messages and drops file snapshots', () => {
+  const headers = Array.from({ length: 8 }, (_, index) => ({ bubbleId: `m${index}`, type: 1 }));
+  const trimmed = trimComposerMessages(JSON.stringify({
+    fullConversationHeadersOnly: headers,
+    conversationMap: { m0: { text: 'old' }, m7: { text: 'new' } },
+    originalFileStates: { file: 'snapshot' },
+    codeBlockData: { file: 'cache' },
+    subComposerIds: ['child'],
+    name: 'Demo',
+  }), 5);
+  const parsed = JSON.parse(trimmed.json) as {
+    fullConversationHeadersOnly: Array<{ bubbleId: string }>;
+    conversationMap: Record<string, unknown>;
+    originalFileStates?: unknown;
+    codeBlockData?: unknown;
+    subComposerIds: string[];
+    name: string;
+  };
+  assert.deepEqual(parsed.fullConversationHeadersOnly.map((item) => item.bubbleId), ['m3', 'm4', 'm5', 'm6', 'm7']);
+  assert.deepEqual(trimmed.bubbleIds, ['m3', 'm4', 'm5', 'm6', 'm7']);
+  assert.deepEqual(Object.keys(parsed.conversationMap), ['m7']);
+  assert.equal(parsed.originalFileStates, undefined);
+  assert.equal(parsed.codeBlockData, undefined);
+  assert.deepEqual(parsed.subComposerIds, ['child']);
+  assert.equal(parsed.name, 'Demo');
 });
 
 test('the newest conversations that fit are kept whole', () => {
@@ -186,6 +216,72 @@ test('a newer local chat is kept and a gist cannot write other database keys', a
   rmSync(folder, { recursive: true, force: true });
 });
 
+test('export keeps the last 5 messages of the 10 newest chats', async () => {
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  for (let index = 1; index <= 12; index += 1) {
+    const bubbles = Array.from({ length: 8 }, (_, message) => ({
+      id: `m${message}`,
+      value: JSON.stringify({ text: `m${message}` }),
+    }));
+    insertComposer(db, composerId(index), index, {
+      bubbles,
+      composer: {
+        fullConversationHeadersOnly: bubbles.map((bubble) => ({ bubbleId: bubble.id, type: 1 })),
+        originalFileStates: { file: 'snapshot' },
+        name: `chat-${index}`,
+      },
+    });
+  }
+  db.close();
+
+  const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  const ids = records.flatMap((record) => (record.kind === 'header' ? [record.header.composerId] : []));
+  assert.deepEqual(ids, Array.from({ length: 10 }, (_, index) => composerId(12 - index)));
+  assert.equal(exported.synced, 10);
+  assert.equal(exported.omitted, 2);
+
+  const newest = composerId(12);
+  const bubbleKeys = records.flatMap((record) => (
+    record.kind === 'kv' && record.key.startsWith(`bubbleId:${newest}:`) ? [record.key.split(':').at(-1)] : []
+  ));
+  assert.deepEqual(bubbleKeys, ['m3', 'm4', 'm5', 'm6', 'm7']);
+  const composer = records.find((record) => record.kind === 'kv' && record.key === `composerData:${newest}`);
+  assert.equal(composer?.kind, 'kv');
+  if (composer?.kind === 'kv') {
+    const parsed = JSON.parse(composer.value) as { originalFileStates?: unknown; fullConversationHeadersOnly: Array<{ bubbleId: string }> };
+    assert.equal(parsed.originalFileStates, undefined);
+    assert.deepEqual(parsed.fullConversationHeadersOnly.map((item) => item.bubbleId), ['m3', 'm4', 'm5', 'm6', 'm7']);
+  }
+  rmSync(folder, { recursive: true, force: true });
+});
+
+test('messages without a conversation list keep the latest 5 by time', async () => {
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  const times = [
+    { id: 'z', createdAt: 1 },
+    { id: 'a', createdAt: 2 },
+    { id: 'm', createdAt: 3 },
+    { id: 'b', createdAt: 4 },
+    { id: 'q', createdAt: 5 },
+    { id: 'c', createdAt: 6 },
+  ];
+  insertComposer(db, NEWER, 5, {
+    bubbles: times.map((item) => ({ id: item.id, value: JSON.stringify({ createdAt: item.createdAt }) })),
+  });
+  db.close();
+
+  const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  const bubbleKeys = records.flatMap((record) => (
+    record.kind === 'kv' && record.key.startsWith(`bubbleId:${NEWER}:`) ? [record.key.split(':').at(-1)] : []
+  ));
+  assert.deepEqual(bubbleKeys, ['a', 'm', 'b', 'q', 'c']);
+  rmSync(folder, { recursive: true, force: true });
+});
+
 test('legacy workspace chats merge into the matching workspace database', async () => {
   const folder = tempUser();
   writeWorkspace(folder, 'abc123', 'file:///C:/Work/demo');
@@ -265,11 +361,21 @@ function writeWorkspace(userFolder: string, id: string, folder: string): void {
   writeFileSync(join(directory, 'workspace.json'), JSON.stringify({ folder }));
 }
 
+function composerId(index: number): string {
+  return `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
+}
+
 function insertComposer(
   db: ReturnType<typeof openDb>,
   composerId: string,
   lastUpdatedAt: number,
-  options: { bubble: string; subagent?: boolean; subagents?: string[] }
+  options: {
+    bubble?: string;
+    bubbles?: Array<{ id: string; value: string }>;
+    subagent?: boolean;
+    subagents?: string[];
+    composer?: Record<string, unknown>;
+  } = {}
 ): void {
   db.prepare(`INSERT INTO composerHeaders (composerId, workspaceId, createdAt, lastUpdatedAt, isArchived, isSubagent, recency, checkpointAt, value, subagentTypeName)
     VALUES (?, 'oldhash', 1, ?, 0, ?, 0, NULL, ?, NULL)`).run(
@@ -280,7 +386,10 @@ function insertComposer(
   );
   db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(
     `composerData:${composerId}`,
-    JSON.stringify({ subComposerIds: options.subagents ?? [] })
+    JSON.stringify({ subComposerIds: options.subagents ?? [], ...options.composer })
   );
-  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`bubbleId:${composerId}:1`, options.bubble);
+  const bubbles = options.bubbles ?? [{ id: '1', value: options.bubble ?? '' }];
+  for (const bubble of bubbles) {
+    db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`bubbleId:${composerId}:${bubble.id}`, bubble.value);
+  }
 }

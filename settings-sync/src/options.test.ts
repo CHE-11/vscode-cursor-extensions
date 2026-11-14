@@ -27,6 +27,6 @@ test('the options menu and the sidebar list the same setup actions', () => {
 });
 
 test('upload and download are sidebar actions and not options-menu duplicates', () => {
-  assert.deepEqual(syncActions.map((action) => action.id), ['upload', 'download']);
-  assert.equal(optionsMenu().some((action) => action.id === 'upload' || action.id === 'download'), false);
+  assert.deepEqual(syncActions.map((action) => action.id), ['upload', 'download', 'clearAndUpload', 'viewLogs']);
+  assert.equal(optionsMenu().some((action) => action.id === 'upload' || action.id === 'download' || action.id === 'viewLogs'), false);
 });

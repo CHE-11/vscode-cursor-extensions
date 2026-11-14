@@ -6,7 +6,8 @@ Run the file you are editing, or the current selection, and edit the program use
 
 - **Run Code** (`Ctrl+Alt+N`) runs the active file. The play button is in the editor title and at the top of the Code Runner sidebar. The same command is on the editor context menu and the explorer file menu.
 - A selection runs from a temporary file next to the original. Untitled editors do too. Turn on `codeRunner.ignoreSelection` to always run the whole file.
-- **Stop Code Run** (`Ctrl+Alt+M`) sends Ctrl+C in the terminal, or kills the output-channel process.
+- **Stop Code Run** (`Ctrl+Alt+M`) sends Ctrl+C to the active Code Runner terminal when it is running, or to the newest one that is still running. It kills the output-channel process when the run is not in a terminal.
+- Running a different file while one is still running opens a new terminal. Running the same file again uses that file's terminal and stops the earlier run. After a run finishes, the next file reuses the free terminal.
 - **Run By Language** (`Ctrl+Alt+J`) picks a language and runs the active editor with that program.
 - **Run Custom Command** (`Ctrl+Alt+K`) runs `codeRunner.customCommand`.
 

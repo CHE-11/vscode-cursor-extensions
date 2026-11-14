@@ -1,0 +1,335 @@
+{
+  "name": "ce-code-counter",
+  "displayName": "CE | Code Counter",
+  "description": "Count code, comment, and blank lines in a workspace, a folder, or the active editor.",
+  "version": "1.0.4",
+  "license": "MIT",
+  "publisher": "che-11",
+  "author": "che-11",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHE-11/vscode-cursor-extensions.git",
+    "directory": "code-counter"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "count",
+    "loc",
+    "lines",
+    "code",
+    "comment"
+  ],
+  "activationEvents": [
+    "onView:code-counter.sidebar",
+    "workspaceContains:**/.code-counter-realtime"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "code-counter.countInWorkspace",
+        "title": "Count Lines in Workspace",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.countInDirectory",
+        "title": "Count Lines in Directory",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.toggleRealtime",
+        "title": "Toggle Real-time Counter",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.outputAvailableLanguages",
+        "title": "Show Available Languages",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.saveLanguageConfigurations",
+        "title": "Save Language Configurations",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.addWalkEntry",
+        "title": "Add Walk Entry",
+        "icon": "$(add)",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.editWalkEntry",
+        "title": "Edit Walk Entry",
+        "icon": "$(edit)",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.deleteWalkEntry",
+        "title": "Remove Walk Entry",
+        "icon": "$(trash)",
+        "category": "Code Counter"
+      },
+      {
+        "command": "code-counter.toggleWalkOption",
+        "title": "Toggle Walk Option",
+        "category": "Code Counter"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "code-counter",
+          "title": "Code Counter",
+          "icon": "images/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "code-counter": [
+        {
+          "id": "code-counter.sidebar",
+          "name": "Code Counter",
+          "contextualTitle": "Code Counter"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "code-counter.countInDirectory",
+          "when": "explorerResourceIsFolder",
+          "group": "2_workspace"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "code-counter.addWalkEntry",
+          "when": "view == code-counter.sidebar && (viewItem == walkGroup || viewItem == walkPlaceholder)",
+          "group": "inline"
+        },
+        {
+          "command": "code-counter.addWalkEntry",
+          "when": "view == code-counter.sidebar && (viewItem == walkGroup || viewItem == walkPlaceholder)",
+          "group": "1_edit"
+        },
+        {
+          "command": "code-counter.editWalkEntry",
+          "when": "view == code-counter.sidebar && viewItem == walkPattern",
+          "group": "inline@1"
+        },
+        {
+          "command": "code-counter.deleteWalkEntry",
+          "when": "view == code-counter.sidebar && viewItem == walkPattern",
+          "group": "inline@2"
+        },
+        {
+          "command": "code-counter.editWalkEntry",
+          "when": "view == code-counter.sidebar && viewItem == walkPattern",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "code-counter.deleteWalkEntry",
+          "when": "view == code-counter.sidebar && viewItem == walkPattern",
+          "group": "2_delete"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Code Counter",
+      "properties": {
+        "code-counter.useGitignore": {
+          "description": "Use .gitignore files when excluding files.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.useFilesExclude": {
+          "description": "Also exclude files matched by files.exclude.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.maxFindFiles": {
+          "description": "Maximum number of files to search.",
+          "type": "number",
+          "default": 1000000
+        },
+        "code-counter.maxOpenFiles": {
+          "description": "Maximum number of files to read at the same time.",
+          "type": "number",
+          "default": 500
+        },
+        "code-counter.ignoreUnsupportedFile": {
+          "description": "Skip files whose language is not recognized.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.printNumberWithCommas": {
+          "description": "Print numbers with thousands separators. CSV output is unchanged.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.includeIncompleteLine": {
+          "description": "Count a final line that does not end with a newline.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.endOfLine": {
+          "description": "Line ending used in the output files.",
+          "type": "string",
+          "enum": [
+            "\n",
+            "\r\n"
+          ],
+          "default": "\n"
+        },
+        "code-counter.fileTypes": {
+          "description": "Extensions to walk, such as .ts or .py. Empty walks every file matched by the include globs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "code-counter.include": {
+          "description": "Glob patterns for files and folders to include.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/*"
+          ]
+        },
+        "code-counter.exclude": {
+          "description": "Glob patterns for files and folders to exclude.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.gitignore",
+            "**/.vscode/**",
+            "**/node_modules/**"
+          ]
+        },
+        "code-counter.countDirectLevelFiles": {
+          "description": "List files that sit directly in a directory as their own row when their total differs from the directory total.",
+          "type": "boolean",
+          "default": true
+        },
+        "code-counter.outputDirectory": {
+          "markdownDescription": "Directory for `languages.json` when save location is `output`. The path can include `${workspaceName}`, `${workspacePath}`, and `${workspaceIndex}`. Count results are not written here.",
+          "type": "string",
+          "default": ".code-counter"
+        },
+        "code-counter.saveLocation": {
+          "description": "Where to store language configurations collected from installed extensions.",
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace",
+            "output",
+            "file"
+          ],
+          "enumDescriptions": [
+            "User settings",
+            "Workspace settings",
+            "languages.json in the output directory",
+            "The file in code-counter.languageConfUri"
+          ],
+          "default": "global"
+        },
+        "code-counter.languageConfUri": {
+          "markdownDescription": "File path or URI used when `code-counter.saveLocation` is `file`.",
+          "type": "string"
+        },
+        "code-counter.languages": {
+          "description": "Saved language configurations.",
+          "type": "object",
+          "default": {},
+          "patternProperties": {
+            ".*": {
+              "type": "object",
+              "title": "Language configuration",
+              "properties": {
+                "aliases": {
+                  "type": "array",
+                  "description": "Names for the language.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "filenames": {
+                  "type": "array",
+                  "description": "Filenames associated with the language.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "extensions": {
+                  "type": "array",
+                  "description": "File extensions associated with the language.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "lineComments": {
+                  "type": "array",
+                  "description": "Character sequences that start a line comment.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "blockComments": {
+                  "type": "array",
+                  "description": "Character sequences that start and end a block comment.",
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "blockStrings": {
+                  "type": "array",
+                  "description": "Character sequences that start and end a block string.",
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "blockStringAsComment": {
+                  "type": "boolean",
+                  "description": "Treat a block string that starts at the beginning of a line as a comment."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "pnpm run compile && node --test out/src/Gitignore.test.js out/src/LineCounter.test.js out/src/jsonc.test.js out/src/match.test.js out/src/walk.test.js",
+    "package": "node package.js"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "~1.88.0",
+    "typescript": "^5.3.3"
+  }
+}

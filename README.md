@@ -13,10 +13,13 @@ Automatically renames paired HTML/XML tags when you type the opening tag. Based 
 Adds tab-menu commands to close unchanged files, diff editors, tabs to the left, and tabs of a chosen type. Based on [Balastrong/close-tabs](https://github.com/Balastrong/close-tabs).
 
 ## [code-runner](./code-runner)
-Runs the active file, or the current selection, from a play button in the editor title. The sidebar edits the program used for each language, extension, and filename glob.
+Runs the active file, or the current selection, from a play button in the editor title. The sidebar edits the program used for each language, extension, and filename glob. A second file opens its own terminal while the first is still running.
+
+## [code-counter](./code-counter)
+Counts code, comment, and blank lines in a workspace, a folder, or the active editor. The activity bar lists those commands and the file types and globs the count walks. Based on [uctakeoff/vscode-counter](https://github.com/uctakeoff/vscode-counter).
 
 ## [settings-sync](./settings-sync)
-Syncs settings, keybindings, snippets, launch config, extensions, and Cursor agent chats through a GitHub Gist. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
+Syncs settings, keybindings, snippets, launch config, extensions, and the 10 newest Cursor agent chats through a GitHub Gist. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
 
 ## [endpointer](./endpointer)
 Jump from a frontend API call to the matching backend route in a monorepo. It indexes routes and frontend calls, lists them in a sidebar, and lets you paste endpoint templates that link the two sides together.

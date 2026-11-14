@@ -5,6 +5,15 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { buildCommand, placeholderContext, quote, resolveExecutor, toPowerShell } from './executor';
 import { readSettings, type RunSettings } from './settings';
+import {
+  freshOccupancy,
+  markCommandSent,
+  markExecutionEnded,
+  markExecutionStarted,
+  markStopped,
+  pickRunningSlot,
+  type RunOccupancy,
+} from './terminalSlots';
 
 interface RunRequest {
   fileUri?: vscode.Uri;
@@ -12,29 +21,35 @@ interface RunRequest {
   custom?: boolean;
 }
 
+interface TerminalSlot extends RunOccupancy {
+  terminal: vscode.Terminal;
+  codeFile: string | undefined;
+  cwd: string;
+}
+
 export class CodeRunner implements vscode.Disposable {
   private readonly output = vscode.window.createOutputChannel('Code Runner');
   private readonly disposables: vscode.Disposable[] = [];
-  private terminal: vscode.Terminal | undefined;
+  private readonly slots: TerminalSlot[] = [];
   private process: ChildProcess | undefined;
   private activeTmp: string | undefined;
-  private lastCwd: string | undefined;
-  private mode: 'terminal' | 'output' | undefined;
   private running = false;
   private runId = 0;
   private disposed = false;
 
   constructor() {
     this.disposables.push(vscode.window.onDidCloseTerminal((closed) => {
-      if (closed !== this.terminal) {
+      const index = this.slots.findIndex((slot) => slot.terminal === closed);
+      if (index < 0) {
         return;
       }
-      this.terminal = undefined;
-      this.lastCwd = undefined;
-      if (this.mode === 'terminal') {
-        this.setRunning(false);
-      }
+      this.slots.splice(index, 1);
+      this.publishRunning();
     }));
+    this.disposables.push(...subscribeShellExecutions(
+      (terminal) => this.onShellStart(terminal),
+      (terminal) => this.onShellEnd(terminal),
+    ));
   }
 
   async run(request: RunRequest = {}): Promise<void> {
@@ -143,10 +158,12 @@ export class CodeRunner implements vscode.Disposable {
 
   stop(): void {
     this.stopOutputProcess();
-    if (this.mode === 'terminal' && this.running && this.terminal) {
-      this.terminal.sendText('\u0003', false);
+    const slot = this.slotToStop();
+    if (slot?.busy) {
+      slot.terminal.sendText('\u0003', false);
+      markStopped(slot);
     }
-    this.setRunning(false);
+    this.publishRunning();
   }
 
   dispose(): void {
@@ -249,42 +266,57 @@ export class CodeRunner implements vscode.Disposable {
     this.stopOutputProcess();
     this.activeTmp = run.isTmp ? run.codeFile : undefined;
     if (run.runInTerminal) {
-      await this.runInTerminal(command, cwd, run.clearPreviousOutput, run.preserveFocus);
+      await this.runInTerminal(command, cwd, run.codeFile, run.clearPreviousOutput, run.preserveFocus);
       return;
     }
     this.runInOutput(command, cwd, id, run);
   }
 
-  private async runInTerminal(command: string, cwd: string, clear: boolean, preserveFocus: boolean): Promise<void> {
+  private async runInTerminal(
+    command: string,
+    cwd: string,
+    codeFile: string | undefined,
+    clear: boolean,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    this.slots.splice(0, this.slots.length, ...this.slots.filter((slot) => !slot.terminal.exitStatus));
+    let slot = pickRunningSlot(this.slots, codeFile);
     let created = false;
-    if (!this.terminal) {
-      this.terminal = vscode.window.createTerminal({
-        name: 'Code Runner',
+    if (!slot) {
+      slot = {
+        terminal: vscode.window.createTerminal({
+          name: terminalTitle(codeFile),
+          cwd,
+          iconPath: new vscode.ThemeIcon('play'),
+        }),
+        codeFile,
         cwd,
-        iconPath: new vscode.ThemeIcon('play'),
-      });
-      this.lastCwd = cwd;
+        ...freshOccupancy(),
+      };
+      this.slots.push(slot);
       created = true;
+    } else if (slot.busy) {
+      slot.terminal.sendText('\u0003', false);
     }
-    const interrupt = this.mode === 'terminal' && this.running;
-    this.mode = 'terminal';
-    this.terminal.show(preserveFocus);
+
+    slot.codeFile = codeFile;
+    this.touch(slot);
+    renameTerminal(slot.terminal, terminalTitle(codeFile));
+    slot.terminal.show(preserveFocus);
     if (clear && !created) {
       await vscode.commands.executeCommand('workbench.action.terminal.clear');
     }
-    if (interrupt) {
-      this.terminal.sendText('\u0003', false);
+    if (!created && cwd !== slot.cwd) {
+      slot.terminal.sendText(`cd ${quote(cwd.replace(/\\/g, '/'))}`);
+      markCommandSent(slot);
+      slot.cwd = cwd;
     }
-    if (!created && cwd !== this.lastCwd) {
-      this.terminal.sendText(`cd ${quote(cwd.replace(/\\/g, '/'))}`);
-      this.lastCwd = cwd;
-    }
-    this.terminal.sendText(command);
-    this.setRunning(true);
+    slot.terminal.sendText(command);
+    markCommandSent(slot);
+    this.publishRunning();
   }
 
   private runInOutput(command: string, cwd: string, id: number, run: Execution): void {
-    this.mode = 'output';
     if (run.clearPreviousOutput) {
       this.output.clear();
     }
@@ -300,7 +332,7 @@ export class CodeRunner implements vscode.Disposable {
       detached: process.platform !== 'win32',
     });
     this.process = child;
-    this.setRunning(true);
+    this.publishRunning();
     const tmp = run.isTmp ? run.codeFile : undefined;
 
     child.stdout?.on('data', (chunk: Buffer | string) => {
@@ -314,7 +346,7 @@ export class CodeRunner implements vscode.Disposable {
         return;
       }
       this.process = undefined;
-      this.setRunning(false);
+      this.publishRunning();
       this.appendLine(error.message);
     });
     child.on('close', (code) => {
@@ -331,7 +363,7 @@ export class CodeRunner implements vscode.Disposable {
         }
       }
       this.process = undefined;
-      this.setRunning(false);
+      this.publishRunning();
       if (run.showMessage) {
         const elapsed = ((Date.now() - started) / 1000).toFixed(1);
         this.appendLine('');
@@ -350,7 +382,48 @@ export class CodeRunner implements vscode.Disposable {
     killTree(child);
   }
 
-  private setRunning(running: boolean): void {
+  private onShellStart(terminal: vscode.Terminal): void {
+    const slot = this.slots.find((item) => item.terminal === terminal);
+    if (!slot) {
+      return;
+    }
+    markExecutionStarted(slot);
+    this.publishRunning();
+  }
+
+  private onShellEnd(terminal: vscode.Terminal): void {
+    const slot = this.slots.find((item) => item.terminal === terminal);
+    if (!slot) {
+      return;
+    }
+    markExecutionEnded(slot);
+    this.publishRunning();
+  }
+
+  private slotToStop(): TerminalSlot | undefined {
+    const active = this.slots.find((slot) => slot.terminal === vscode.window.activeTerminal);
+    if (active?.busy) {
+      return active;
+    }
+    for (let index = this.slots.length - 1; index >= 0; index -= 1) {
+      const slot = this.slots[index];
+      if (slot?.busy) {
+        return slot;
+      }
+    }
+    return undefined;
+  }
+
+  private touch(slot: TerminalSlot): void {
+    const index = this.slots.indexOf(slot);
+    if (index >= 0 && index < this.slots.length - 1) {
+      this.slots.splice(index, 1);
+      this.slots.push(slot);
+    }
+  }
+
+  private publishRunning(): void {
+    const running = this.process !== undefined || this.slots.some((slot) => slot.busy);
     if (this.running === running) {
       return;
     }
@@ -473,6 +546,36 @@ function isPowerShellTerminal(): boolean {
     }
   }
   return vscode.env.shell.toLowerCase().includes('powershell');
+}
+
+function terminalTitle(codeFile: string | undefined): string {
+  if (!codeFile) {
+    return 'Code Runner';
+  }
+  return `Code Runner: ${path.basename(codeFile)}`;
+}
+
+function renameTerminal(terminal: vscode.Terminal, title: string): void {
+  const rename = (terminal as vscode.Terminal & { rename?: (name: string) => void }).rename;
+  rename?.call(terminal, title);
+}
+
+function subscribeShellExecutions(
+  onStart: (terminal: vscode.Terminal) => void,
+  onEnd: (terminal: vscode.Terminal) => void,
+): vscode.Disposable[] {
+  const api = vscode.window as typeof vscode.window & {
+    onDidStartTerminalShellExecution?: (listener: (event: { terminal: vscode.Terminal }) => void) => vscode.Disposable;
+    onDidEndTerminalShellExecution?: (listener: (event: { terminal: vscode.Terminal }) => void) => vscode.Disposable;
+  };
+  const disposables: vscode.Disposable[] = [];
+  if (api.onDidStartTerminalShellExecution) {
+    disposables.push(api.onDidStartTerminalShellExecution((event) => onStart(event.terminal)));
+  }
+  if (api.onDidEndTerminalShellExecution) {
+    disposables.push(api.onDidEndTerminalShellExecution((event) => onEnd(event.terminal)));
+  }
+  return disposables;
 }
 
 function killTree(child: ChildProcess): void {

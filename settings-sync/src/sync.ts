@@ -28,7 +28,7 @@ import {
 import { clearSettings, localSettingsPath, proxyUrl, readLocal, readSettings, updateSettings, writeLocal, type SyncSettings } from './settings';
 import { exportChats, importChats, isChatChunkName } from './chats';
 import { optionActions, optionsMenu, type SyncAction, type ToggleKey } from './options';
-import { showSummary } from './summary';
+import { showSummary, viewSyncLogs } from './summary';
 import { clearToken, getToken, promptToken } from './token';
 import { stopWatching, watchUploads } from './watcher';
 
@@ -36,6 +36,7 @@ interface RunOptions {
   publicGist?: boolean;
   extensions?: boolean;
   quietIfBusy?: boolean;
+  replaceGist?: boolean;
 }
 
 export async function bootstrap(app: App): Promise<void> {
@@ -95,15 +96,16 @@ export async function upload(app: App, options: RunOptions = {}): Promise<void> 
       throw new Error(`This Gist belongs to ${existing.ownerLogin}.`);
     }
     isPublic = existing.public;
-    if (!hasChanges(existing, files, preserveChats) && !settings.forceUpload) {
+    const replaceGist = options.replaceGist === true;
+    if (!replaceGist && !hasChanges(existing, files, preserveChats) && !settings.forceUpload) {
       if (notes.length > 0) void vscode.window.showWarningMessage(`Settings Sync: ${notes[0]}`);
       else void vscode.window.setStatusBarMessage('Settings Sync: the Gist already matches these files.', 5000);
       return;
     }
-    if (!settings.forceUpload && !(await confirmUpload(existing, local))) return;
+    if (!replaceGist && !settings.forceUpload && !(await confirmUpload(existing, local))) return;
 
-    void vscode.window.setStatusBarMessage('Settings Sync: uploading.', 3000);
-    await client.updateGist(gistId, updatePayload(existing, files, preserveChats));
+    void vscode.window.setStatusBarMessage(replaceGist ? 'Settings Sync: clearing the Gist and uploading.' : 'Settings Sync: uploading.', 3000);
+    await client.updateGist(gistId, replaceGist ? replacePayload(existing, files) : updatePayload(existing, files, preserveChats));
     await rememberSync(app, local, uploadedAt, uploadedAt);
     report(settings, {
       upload: true,
@@ -211,6 +213,21 @@ export async function download(app: App, options: RunOptions = {}): Promise<void
   });
 }
 
+export async function clearAndUpload(app: App): Promise<void> {
+  const gistId = parseGistId(readSettings().gist);
+  if (!gistId) {
+    void vscode.window.showInformationMessage('Set a Gist id before clearing it.');
+    return;
+  }
+  const answer = await vscode.window.showWarningMessage(
+    'This deletes every file in the Gist, then uploads the current settings.',
+    { modal: true },
+    'Clear and Upload'
+  );
+  if (answer !== 'Clear and Upload') return;
+  await upload(app, { replaceGist: true });
+}
+
 export async function reset(app: App): Promise<void> {
   const answer = await vscode.window.showWarningMessage(
     'This clears the saved token, Gist id, and local sync settings.',
@@ -246,6 +263,8 @@ export async function openOptions(app: App): Promise<void> {
 export async function runOption(app: App, id: SyncAction['id']): Promise<void> {
   if (id === 'upload') return upload(app);
   if (id === 'download') return download(app, { extensions: true });
+  if (id === 'clearAndUpload') return clearAndUpload(app);
+  if (id === 'viewLogs') return viewSyncLogs();
   const action = optionActions.find((item) => item.id === id);
   if (!action) return;
   if (action.toggle && action.on && action.off) return toggle(app, action.toggle, action.on, action.off);
@@ -442,6 +461,14 @@ function updatePayload(existing: RemoteGist, files: SyncFile[], preserveChats: b
     if (payload[name] || name.startsWith('keybindings')) continue;
     if (preserveChats && isChatChunkName(name)) continue;
     payload[name] = null;
+  }
+  return payload;
+}
+
+function replacePayload(existing: RemoteGist, files: SyncFile[]): Record<string, { content: string } | null> {
+  const payload: Record<string, { content: string } | null> = gistPayload(files);
+  for (const name of Object.keys(existing.files)) {
+    if (!payload[name]) payload[name] = null;
   }
   return payload;
 }

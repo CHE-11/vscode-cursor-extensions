@@ -5,6 +5,11 @@ If you work in a monorepo like I tend to do, you know how annoying it can be to 
 
 https://github.com/CHE-11/endpointer/assets/57516026/ad8bec06-10b8-418c-9d39-135d24d3143b
 
+## Project config
+Opening a repository does not create a config file. Without `.vscode/endpointer.json`, Endpointer does not index that project.
+
+**Add endpointer.json** in the Endpointer sidebar creates that file for the folder you choose and starts indexing. Use it to limit which frontend and backend paths are indexed, or set `enabled` to `false` to turn Endpointer off. If the file is already there, it is left unchanged.
+
 ## Usage
 There are two options in the command palette:
 - Paste Endpoint Template ➜ This pastes an endpoint template that you can fill in with the endpoint and method. 

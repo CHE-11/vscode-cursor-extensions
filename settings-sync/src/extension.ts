@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { App } from './app';
 import { resolveUserFolder } from './safe';
 import { SettingsSyncView } from './sidebar';
-import { bootstrap, download, how, openOptions, reset, runOption, upload } from './sync';
+import { disposeSyncLogs, viewSyncLogs } from './summary';
+import { bootstrap, clearAndUpload, download, how, openOptions, reset, runOption, upload } from './sync';
 import { migrateToken } from './token';
 import { stopWatching } from './watcher';
 
@@ -21,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const refreshSidebar = () => sidebar.refresh();
   context.subscriptions.push(
     { dispose: stopWatching },
+    { dispose: disposeSyncLogs },
     vscode.window.registerTreeDataProvider('settings-sync.sidebar', sidebar),
     vscode.commands.registerCommand('settings-sync.upload', async () => {
       await upload(app);
@@ -30,6 +32,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await download(app, { extensions: true });
       refreshSidebar();
     }),
+    vscode.commands.registerCommand('settings-sync.clearAndUpload', async () => {
+      await clearAndUpload(app);
+      refreshSidebar();
+    }),
+    vscode.commands.registerCommand('settings-sync.viewLogs', () => viewSyncLogs()),
     vscode.commands.registerCommand('settings-sync.reset', async () => {
       await reset(app);
       refreshSidebar();

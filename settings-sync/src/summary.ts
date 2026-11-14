@@ -2,6 +2,21 @@ import * as vscode from 'vscode';
 import type { SyncFile } from './files';
 
 let channel: vscode.OutputChannel | undefined;
+let hasLogs = false;
+
+export function viewSyncLogs(): void {
+  if (!channel || !hasLogs) {
+    void vscode.window.showInformationMessage('No sync logs from this session are available.');
+    return;
+  }
+  channel.show();
+}
+
+export function disposeSyncLogs(): void {
+  channel?.dispose();
+  channel = undefined;
+  hasLogs = false;
+}
 
 export function showSummary(options: {
   upload: boolean;
@@ -17,13 +32,15 @@ export function showSummary(options: {
   notes?: string[];
 }): void {
   const action = options.upload ? 'Upload' : 'Download';
+  channel ??= vscode.window.createOutputChannel('Settings Sync');
+  hasLogs = true;
   if (options.quiet) {
     const suffix = options.notes && options.notes.length > 0 ? ` ${options.notes[0]}` : '';
     void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.${suffix}`, 8000);
-    return;
+  } else {
+    void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.`, 5000);
   }
 
-  channel ??= vscode.window.createOutputChannel('Settings Sync');
   channel.appendLine(`SETTINGS SYNC ${action.toUpperCase()} SUMMARY`);
   channel.appendLine('--------------------');
   channel.appendLine(`GitHub Gist: ${options.gist || '(none)'}`);
@@ -54,7 +71,6 @@ export function showSummary(options: {
   }
   channel.appendLine('--------------------');
   channel.appendLine('Done.');
-  void vscode.window.setStatusBarMessage(`Settings Sync: ${action.toLowerCase()} complete.`, 5000);
 }
 
 function appendIds(ids: string[], empty: string): void {

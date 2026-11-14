@@ -16,7 +16,7 @@ Maintained by che-11. The behavior comes from [settings-sync](https://github.com
 
 ## Chats
 
-On Cursor, upload and download also sync agent chats. The chats are copied out of `User/globalStorage/state.vscdb` and stored in the same Gist as the settings. The gist can hold about 8 MB of chat text, so only the newest conversations that fit are uploaded. Older ones stay on the machine that has them. Message text is included. The large agent blob cache is not.
+On Cursor, upload and download also sync agent chats. The chats are copied out of `User/globalStorage/state.vscdb` and stored in the same Gist as the settings. Upload keeps the 10 newest chats, and each chat keeps its last 5 messages. Older chats and older messages stay on the machine that has them. Message text is included. The large agent blob cache, saved file snapshots, and code-block cache are not.
 
 Download merges chats by id. A newer copy wins, and a chat that exists only on this machine is left in place. Nothing else in `state.vscdb` is replaced. Reload the window after a download to see the merged chats. Turn this off with **Toggle Chat Sync** or `settings-sync.syncChats`.
 
@@ -32,7 +32,7 @@ Leave `settings-sync.githubEnterpriseUrl` empty for github.com. An enterprise UR
 
 The **Settings Sync** icon on the activity bar opens the sync view.
 
-**Sync** uploads or downloads. Each row shows the last time that action ran.
+**Sync** uploads, downloads, or clears the Gist and uploads the current settings. Upload and Download show the last time that action ran. **Clear Gist and Reupload** asks before it deletes the files in the Gist and uploads the current settings in their place. **View Sync Logs** opens the Settings Sync output channel when a summary from this session is still there.
 
 **Setup** has the same actions as **Settings Sync: Options**. Set GitHub Token shows whether a token is saved, and Choose Gist shows the Gist id. The token itself is not shown. The other rows edit local settings, open settings, download a public Gist, upload to a new public Gist, add or import a custom file, and toggle auto upload, auto download, force upload, force download, the quiet summary, and chat sync. How to Configure and Reset are there too.
 
@@ -46,6 +46,8 @@ The **Settings Sync** icon on the activity bar opens the sync view.
 | --- | --- | --- |
 | Settings Sync: Upload Settings | `settings-sync.upload` | Alt+Shift+U |
 | Settings Sync: Download Settings | `settings-sync.download` | Alt+Shift+D |
+| Settings Sync: Clear Gist and Reupload | `settings-sync.clearAndUpload` | |
+| Settings Sync: View Sync Logs | `settings-sync.viewLogs` | |
 | Settings Sync: Options | `settings-sync.options` | |
 | Settings Sync: How to Configure | `settings-sync.how` | |
 | Settings Sync: Reset | `settings-sync.reset` | |

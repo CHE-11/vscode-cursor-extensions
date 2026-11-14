@@ -89,6 +89,22 @@ function getEnabledWorkspaceFolders(workspaceFolders: readonly vscode.WorkspaceF
     const result = readEndpointerConfig(folder);
     return result.status === 'ok' && result.config.enabled;
   });
+}
+
+function isEndpointerConfigMissing(): boolean {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    return false;
+  }
+  return folders.some(folder => readEndpointerConfig(folder).status === 'missing');
+}
+
+function resolveEndpointerConfig(workspaceFolder: vscode.WorkspaceFolder): EndpointerConfig | undefined {
+  const result = readEndpointerConfig(workspaceFolder);
+  if (result.status === 'ok' && result.config.enabled) {
+    return result.config;
+  }
+  return undefined;
 } 
 
 
@@ -105,35 +121,62 @@ export function activate(context: vscode.ExtensionContext) {
   statusBar.tooltip = "Indexing the workspace for endpoints";
   statusBar.hide(); // Initially hidden
 
+  const updateConfigMissingContext = () => {
+    void vscode.commands.executeCommand('setContext', 'endpointer.configMissing', isEndpointerConfigMissing());
+  };
+  updateConfigMissingContext();
+
+  let configRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleConfigRefresh = () => {
+    if (configRefreshTimer) {
+      clearTimeout(configRefreshTimer);
+    }
+    configRefreshTimer = setTimeout(() => {
+      updateConfigMissingContext();
+      void vscode.commands.executeCommand('extension.reindexWorkspace');
+    }, 200);
+  };
+
   const enableProjectCommand = vscode.commands.registerCommand('extension.enableForProject', async () => {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
-      vscode.window.showInformationMessage('Open a folder before enabling Endpointer.');
+      vscode.window.showInformationMessage('Open a folder before adding endpointer.json.');
       return;
     }
 
-    for (const folder of folders) {
-      const result = readEndpointerConfig(folder);
-      if (result.status === 'invalid') {
-        vscode.window.showErrorMessage(`Could not enable Endpointer. .vscode/endpointer.json in ${folder.name} is not valid JSON.`);
+    let folder = folders[0];
+    if (folders.length > 1) {
+      const picked = await vscode.window.showWorkspaceFolderPick({
+        placeHolder: 'Choose the folder for endpointer.json'
+      });
+      if (!picked) {
         return;
       }
-
-      const config: EndpointerConfig = result.status === 'ok'
-        ? { ...result.config, enabled: true }
-        : { ...DEFAULT_CONFIG, enabled: true };
-      writeEndpointerConfig(folder, config);
+      folder = picked;
     }
 
-    vscode.window.showInformationMessage('Endpointer is enabled for this project.');
-    await vscode.commands.executeCommand('extension.reindexWorkspace');
+    const configPath = getEndpointerConfigPath(folder);
+    if (fs.existsSync(configPath)) {
+      const existing = await vscode.workspace.openTextDocument(vscode.Uri.file(configPath));
+      await vscode.window.showTextDocument(existing);
+      return;
+    }
+
+    writeEndpointerConfig(folder, DEFAULT_CONFIG);
+    scheduleConfigRefresh();
+    const created = await vscode.workspace.openTextDocument(vscode.Uri.file(configPath));
+    await vscode.window.showTextDocument(created);
+    vscode.window.showInformationMessage(`Added .vscode/endpointer.json to ${folder.name}.`);
   });
 
   // Register the command that starts indexing
-  let indexWorkspaceCommand = vscode.commands.registerCommand('extension.reindexWorkspace', async () => {
+  let indexWorkspaceCommand = vscode.commands.registerCommand('extension.reindexWorkspace', async (silent?: boolean) => {
+    const quiet = silent === true;
     // Ensure there is at least one folder opened in the editor
     if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-      vscode.window.showInformationMessage('No folder open to index.');
+      if (!quiet) {
+        vscode.window.showInformationMessage('No folder open to index.');
+      }
       return;
     }
 
@@ -147,7 +190,17 @@ export function activate(context: vscode.ExtensionContext) {
       if (vscode.window.activeTextEditor) {
         updateDecorations(vscode.window.activeTextEditor);
       }
-      vscode.window.showInformationMessage('Endpointer is not enabled for this project. Run "Endpointer: Enable for Project" to turn it on.');
+      if (!quiet) {
+        const invalidFolder = vscode.workspace.workspaceFolders.find(folder => readEndpointerConfig(folder).status === 'invalid');
+        const missingFolder = vscode.workspace.workspaceFolders.find(folder => readEndpointerConfig(folder).status === 'missing');
+        if (invalidFolder) {
+          vscode.window.showErrorMessage(`.vscode/endpointer.json in ${invalidFolder.name} is not valid JSON.`);
+        } else if (missingFolder) {
+          vscode.window.showInformationMessage('Endpointer did not index this project because it has no .vscode/endpointer.json.');
+        } else {
+          vscode.window.showInformationMessage('Endpointer is turned off in .vscode/endpointer.json.');
+        }
+      }
       return;
     }
 
@@ -422,6 +475,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --------------------------------------------------------------------------------------------------------------------
 
+  const configWatcher = vscode.workspace.createFileSystemWatcher('**/.vscode/endpointer.json');
+  configWatcher.onDidCreate(scheduleConfigRefresh);
+  configWatcher.onDidChange(scheduleConfigRefresh);
+  configWatcher.onDidDelete(scheduleConfigRefresh);
+  context.subscriptions.push(configWatcher);
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(scheduleConfigRefresh));
+
   context.subscriptions.push( pasteBackendDisposable, pasteFrontendDisposable, handleLinkClickCommand, copyToClipboardCommand, enableProjectCommand, indexWorkspaceCommand, statusBar, formatEndpoints, openBackendRouteCommand);
 
   // Provide real document links so Ctrl+Click jumps directly to the file
@@ -453,11 +513,11 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(docLinkProvider);
 
-  // Index on activation only when the project has already been enabled.
+  // Index on activation only when .vscode/endpointer.json exists and is enabled.
+  // A missing file is left unindexed and is not created.
   if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    if (getEnabledWorkspaceFolders(vscode.workspace.workspaceFolders).length > 0) {
-      vscode.commands.executeCommand('extension.reindexWorkspace');
-    }
+    const hasEnabledFolder = getEnabledWorkspaceFolders(vscode.workspace.workspaceFolders).length > 0;
+    vscode.commands.executeCommand('extension.reindexWorkspace', !hasEnabledFolder);
   }
 }
 
@@ -477,11 +537,10 @@ async function performIndexing(workspaceFolders: any): Promise<any> {
   }
 
   for (const folder of workspaceFolders) {
-    const configResult = readEndpointerConfig(folder);
-    if (configResult.status !== 'ok' || !configResult.config.enabled) {
+    const endpointerConfig = resolveEndpointerConfig(folder);
+    if (!endpointerConfig) {
       continue;
     }
-    const endpointerConfig = configResult.config;
     
     // Build patterns for frontend and backend
     const frontendPatterns = buildSearchPatterns(

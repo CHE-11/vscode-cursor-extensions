@@ -2,7 +2,7 @@
   "name": "ce-endpointer",
   "displayName": "CE | Endpointer",
   "description": "",
-  "version": "1.0.55",
+  "version": "1.0.57",
   "license": "MIT",
   "publisher": "che-11",
   "icon": "icon.png",
@@ -65,7 +65,8 @@
     "commands": [
       {
         "command": "extension.enableForProject",
-        "title": "Endpointer: Enable for Project"
+        "title": "Endpointer: Add endpointer.json",
+        "icon": "$(new-file)"
       },
       {
         "command": "extension.reindexWorkspace",
@@ -109,9 +110,19 @@
       ],
       "view/title": [
         {
+          "command": "extension.enableForProject",
+          "when": "view == endpointer.routes && endpointer.configMissing",
+          "group": "navigation@1"
+        },
+        {
           "command": "extension.reindexWorkspace",
           "when": "view == endpointer.routes",
           "group": "navigation"
+        },
+        {
+          "command": "extension.enableForProject",
+          "when": "view == endpointer.frontendCalls && endpointer.configMissing",
+          "group": "navigation@1"
         },
         {
           "command": "extension.reindexWorkspace",
@@ -140,7 +151,19 @@
           "name": "Frontend Calls"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "endpointer.routes",
+        "when": "endpointer.configMissing",
+        "contents": "This workspace has no endpointer.json, so Endpointer is not indexing it.\n[Add endpointer.json](command:extension.enableForProject)"
+      },
+      {
+        "view": "endpointer.frontendCalls",
+        "when": "endpointer.configMissing",
+        "contents": "This workspace has no endpointer.json, so Endpointer is not indexing it.\n[Add endpointer.json](command:extension.enableForProject)"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
