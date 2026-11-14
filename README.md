@@ -31,7 +31,7 @@ Puts fold-level buttons on the status bar so the active editor can be collapsed 
 Hides files and folders from the explorer with context menu actions, a Hidden Items view, and saved workspaces. Based on [Devine-Davies/vs-make-hidden](https://github.com/Devine-Davies/vs-make-hidden).
 
 ## [settings-sync](./settings-sync)
-Syncs settings, keybindings, snippets, launch config, extensions, and the 15 newest Cursor agent chats through a GitHub Gist or a JSON file in a local folder. The activity bar shows sync status and the setup actions. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
+Syncs settings, keybindings, snippets, launch config, and extensions through a GitHub Gist or a JSON file in a local folder. A Gist also syncs Cursor chats. A local folder can sync chats, with a chat cap and a per-chat message cap. The activity bar shows the actions for the selected location. The token stays in Secret Storage, and downloads ask before changing extensions. Based on [shanalikhan/settings-sync](https://github.com/shanalikhan/settings-sync).
 
 ## [speed-start](./speed-start)
 Finds folders, large files, and startup extensions that slow Cursor down, then adds the ones you pick to `.cursorignore`, `.gitignore`, or the workspace search and watcher excludes.

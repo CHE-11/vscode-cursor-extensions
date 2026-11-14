@@ -2,7 +2,7 @@
   "name": "ce-settings-sync",
   "displayName": "CE | Settings Sync",
   "description": "Sync settings, keybindings, snippets, extensions, and Cursor chats through a GitHub Gist or a local folder.",
-  "version": "1.0.15",
+  "version": "1.0.17",
   "license": "MIT",
   "publisher": "che-11",
   "author": "che-11",
@@ -183,7 +183,7 @@
         "settings-sync.syncChats": {
           "type": "boolean",
           "default": true,
-          "description": "Include Cursor agent chat history in upload and download. Reload the window after a download to see them."
+          "description": "When the sync location is a local folder, include Cursor agent chat history. A Gist always includes chats. Reload the window after a download to see them."
         },
         "settings-sync.githubEnterpriseUrl": {
           "type": "string",

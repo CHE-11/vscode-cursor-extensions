@@ -284,7 +284,7 @@ async function applyDownload(
   const planned = await planWrites(app.userFolder, existing, local, settings);
   const notes: string[] = [];
   let chatsApplied = 0;
-  if (settings.syncChats && vscode.env.appName === 'Cursor' && Object.keys(planned.chats).length > 0) {
+  if (includeChats(settings) && vscode.env.appName === 'Cursor' && Object.keys(planned.chats).length > 0) {
     const imported = await importChats(app.userFolder, planned.chats);
     notes.push(...imported.notes);
     chatsApplied = imported.applied;
@@ -396,7 +396,7 @@ export async function reset(app: App): Promise<void> {
 export async function how(): Promise<void> {
   const open = 'Open GitHub Tokens';
   const choice = await vscode.window.showInformationMessage(
-    'Create a GitHub personal access token with the gist scope, then save it from the Settings Sync sidebar. Upload sends your editor settings to a Gist. Sync Location can use a local folder instead, which writes settings-sync.json. Download asks before it installs or removes extensions.',
+    'Sync Location chooses a Gist or a local folder. A Gist needs a token with the gist scope and always includes Cursor chats. A local folder uses Select Local Folder and has the chat sync options. Download asks before it installs or removes extensions.',
     open
   );
   if (choice === open) await vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens'));
@@ -424,7 +424,8 @@ export async function runOption(app: App, id: SyncAction['id']): Promise<void> {
     await promptToken(app.context);
     return;
   }
-  if (id === 'syncLocation') return chooseLocation(app);
+  if (id === 'syncLocation') return chooseLocation();
+  if (id === 'selectFolder') return selectFolder(app);
   if (id === 'chooseGist') return chooseGist(app);
   if (id === 'editLocal') return editLocal(app);
   if (id === 'openSettings') {
@@ -471,7 +472,7 @@ function armWatcher(app: App): void {
     stopUploadWatching();
     return;
   }
-  watchUploads(app, settings.autoUploadDelay, (current) => upload(current, { quietIfBusy: true }), settings.syncChats);
+  watchUploads(app, settings.autoUploadDelay, (current) => upload(current, { quietIfBusy: true }), includeChats(settings));
 }
 
 function armFolderWatcher(app: App): void {
@@ -502,6 +503,10 @@ async function downloadChangedBundle(app: App, folder: string): Promise<void> {
 function locationReady(app: App, settings: SyncSettings): boolean {
   if (settings.location === 'folder') return folderIsSafe(app.userFolder, settings.folder);
   return parseGistId(settings.gist) !== null;
+}
+
+function includeChats(settings: SyncSettings): boolean {
+  return settings.location === 'gist' || settings.syncChats;
 }
 
 async function collectFiles(
@@ -558,13 +563,13 @@ async function collectFiles(
     });
   }
 
-  if (settings.syncChats && vscode.env.appName === 'Cursor') {
+  if (includeChats(settings) && vscode.env.appName === 'Cursor') {
+    const gistChats = settings.location === 'gist';
     const exported = await exportChats(app.userFolder, {
       budgetBytes: CHAT_BUDGET_BYTES,
       fileBytes: CHAT_FILE_BYTES,
       valueBytes: CHAT_VALUE_BYTES,
-      chatCount: local.chatCount,
-      messageCount: local.messageCount,
+      ...(gistChats ? { allChats: true } : { chatCount: local.chatCount, messageCount: local.messageCount }),
     });
     notes.push(...exported.notes);
     preserveChats = exported.preserve;
@@ -609,7 +614,7 @@ async function planWrites(
       continue;
     }
     if (isChatChunkName(gistName)) {
-      if (settings.syncChats) chats[gistName] = file.content;
+      if (includeChats(settings)) chats[gistName] = file.content;
       continue;
     }
     const keybinding = gistName === FILES.keybindings || gistName === FILES.keybindingsMac;
@@ -750,25 +755,25 @@ async function loadLocal(app: App): Promise<LocalSettings> {
   return settings;
 }
 
-async function chooseLocation(app: App): Promise<void> {
+async function chooseLocation(): Promise<void> {
   const picked = await vscode.window.showQuickPick(
     [
-      { label: 'GitHub Gist', location: 'gist' as const, description: 'Use the saved Gist' },
-      { label: 'Local Folder', location: 'folder' as const, description: 'Use a folder on this computer' },
+      { label: 'Gist', location: 'gist' as const, description: 'GitHub Gist' },
+      { label: 'Local Folder', location: 'folder' as const, description: 'A folder on this computer' },
     ],
     { title: 'Sync Location', ignoreFocusOut: true }
   );
   if (!picked) return;
-  if (picked.location === 'gist') {
-    await updateSettings({ location: 'gist' });
-    return;
-  }
+  await updateSettings({ location: picked.location });
+}
+
+async function selectFolder(app: App): Promise<void> {
   const selected = await vscode.window.showOpenDialog({
     title: 'Sync Folder',
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: 'Select Sync Folder',
+    openLabel: 'Select Local Folder',
   });
   if (!selected?.[0]) return;
   const folder = selected[0].fsPath;
@@ -852,9 +857,12 @@ async function sharePublic(app: App): Promise<void> {
 }
 
 async function addCustomFile(app: App): Promise<void> {
+  const location = readSettings().location;
   const entered = await vscode.window.showInputBox({
     title: 'Custom file',
-    prompt: 'Absolute path of a file to include in the Gist.',
+    prompt: location === 'folder'
+      ? 'Absolute path of a file to include in the sync folder.'
+      : 'Absolute path of a file to include in the Gist.',
     ignoreFocusOut: true,
   });
   if (!entered) return;

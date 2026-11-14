@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -5,12 +6,19 @@ import { join } from 'node:path';
 const nodeRequire = createRequire(__filename);
 
 export const CHAT_PREFIX = 'chats|';
-export const CHAT_BUDGET_BYTES = 8_000_000;
+export const CHAT_BUDGET_BYTES = 24_000_000;
 export const CHAT_FILE_BYTES = 900_000;
 export const CHAT_VALUE_BYTES = 1_000_000;
 export const CHAT_COUNT = 15;
 export const MESSAGE_COUNT = 30;
 const CHAT_HARD_FILE_BYTES = 990_000;
+const BLOB_PART_BYTES = 500_000;
+const MAX_BLOBS_PER_CHAT = 5_000;
+const MAX_CHAT_BLOB_BYTES = CHAT_BUDGET_BYTES;
+const BLOB_PREFIX = 'agentKv:blob:';
+const CHECKPOINT_PREFIX = 'agentKv:checkpoint:';
+const BUBBLE_CHECKPOINT_PREFIX = 'agentKv:bubbleCheckpoint:';
+const BLOB_ID = /^[0-9a-f]{64}$/;
 
 const LEGACY_COMPOSER = 'composer.composerData';
 const LEGACY_CHAT = 'workbench.panel.aichat.view.aichat.chatdata';
@@ -46,9 +54,17 @@ export interface ChatHeader {
   subagentTypeName: string | null;
 }
 
+interface StoredKv {
+  key: string;
+  value: string;
+  encoding?: 'base64';
+  part?: number;
+  parts?: number;
+}
+
 export type ChatRecord =
   | { kind: 'header'; header: ChatHeader; complete: boolean }
-  | { kind: 'kv'; composerId: string; key: string; value: string }
+  | ({ kind: 'kv'; composerId: string } & StoredKv)
   | { kind: 'legacy'; folder: string; legacyKey: LegacyKey; value: string };
 
 export interface ChatFile {
@@ -62,6 +78,7 @@ export interface ChatLimits {
   valueBytes: number;
   chatCount?: number;
   messageCount?: number;
+  allChats?: boolean;
 }
 
 export interface ChatExportResult {
@@ -186,7 +203,7 @@ export function mergeChatTabs(localJson: string | null, remoteJson: string): str
   return mergeCollection(localJson, remoteJson, 'tabs', tabIdentity, tabTime);
 }
 
-export function trimComposerMessages(composerJson: string, messageLimit: number): { json: string; bubbleIds: string[] | null } {
+export function trimComposerMessages(composerJson: string, messageLimit: number | null): { json: string; bubbleIds: string[] | null } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(composerJson);
@@ -197,10 +214,16 @@ export function trimComposerMessages(composerJson: string, messageLimit: number)
   const record = parsed as Record<string, unknown>;
   let bubbleIds: string[] | null = null;
   if (Array.isArray(record.fullConversationHeadersOnly)) {
-    const kept = messageLimit <= 0 ? [] : record.fullConversationHeadersOnly.filter(isBubbleHeader).slice(-messageLimit);
-    record.fullConversationHeadersOnly = kept;
-    bubbleIds = kept.map((item) => item.bubbleId);
-    if (record.conversationMap && typeof record.conversationMap === 'object' && !Array.isArray(record.conversationMap)) {
+    const headers = record.fullConversationHeadersOnly.filter(isBubbleHeader);
+    if (messageLimit !== null && messageLimit <= 0) {
+      record.fullConversationHeadersOnly = [];
+      bubbleIds = [];
+    } else if (headers.length > 0) {
+      const kept = messageLimit === null ? headers : headers.slice(-messageLimit);
+      record.fullConversationHeadersOnly = kept;
+      bubbleIds = kept.map((item) => item.bubbleId);
+    }
+    if (bubbleIds && record.conversationMap && typeof record.conversationMap === 'object' && !Array.isArray(record.conversationMap)) {
       const map = record.conversationMap as Record<string, unknown>;
       for (const key of Object.keys(map)) {
         if (!bubbleIds.includes(key)) delete map[key];
@@ -345,8 +368,9 @@ export function readChatWatermark(userFolder: string): number | null {
 function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResult {
   const dbPath = globalDbPath(userFolder);
   if (!existsSync(dbPath)) return preserveResult('No Cursor chat database was found.');
-  const chatCount = limits.chatCount ?? CHAT_COUNT;
-  const messageCount = limits.messageCount ?? MESSAGE_COUNT;
+  const allChats = limits.allChats === true;
+  const chatCount = allChats ? null : limits.chatCount ?? CHAT_COUNT;
+  const messageCount = allChats ? null : limits.messageCount ?? MESSAGE_COUNT;
   const db = openDatabase(dbPath, true);
   try {
     db.exec('PRAGMA query_only = ON');
@@ -357,16 +381,27 @@ function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResu
     const bundles: Bundle[] = [];
     let skippedLarge = 0;
     let olderThanLimit = 0;
+    let unavailable = 0;
+    let omittedEarly = 0;
+    let usedBytes = 0;
     for (const header of readHeaders(db)) {
       if (header.isSubagent === 1 || seen.has(header.composerId)) continue;
-      if (bundles.length >= chatCount) {
+      if (usedBytes >= limits.budgetBytes) break;
+      if (chatCount !== null && bundles.length >= chatCount) {
         olderThanLimit += 1;
         continue;
       }
       const loaded = loadBundle(db, header, seen, limits.valueBytes, messageCount);
       skippedLarge += loaded.skippedLarge;
+      unavailable += loaded.unavailable;
       if (loaded.records.length === 0) continue;
-      bundles.push({ records: loaded.records, bytes: Buffer.byteLength(JSON.stringify(loaded.records)) });
+      const bytes = Buffer.byteLength(JSON.stringify(loaded.records));
+      if (bytes > limits.budgetBytes || usedBytes + bytes > limits.budgetBytes) {
+        omittedEarly += 1;
+        continue;
+      }
+      usedBytes += bytes;
+      bundles.push({ records: loaded.records, bytes });
     }
     const packed = selectByBudget(bundles, limits.budgetBytes);
     const records = packed.selected.flatMap((bundle) => bundle.records);
@@ -374,11 +409,11 @@ function exportChatsFrom(userFolder: string, limits: ChatLimits): ChatExportResu
     const legacy = loadLegacy(userFolder, Math.max(0, limits.budgetBytes - used), limits.valueBytes);
     skippedLarge += legacy.skippedLarge;
     records.push(...legacy.records);
-    const omittedBySize = packed.omitted + legacy.omitted;
+    const omittedBySize = packed.omitted + legacy.omitted + omittedEarly;
     const omitted = olderThanLimit + omittedBySize;
     const chunked = chunkChatRecords(records, limits.fileBytes, limits.valueBytes);
     skippedLarge += chunked.skippedLarge;
-    const notes = exportNotes(chatCount, messageCount, packed.selected.length, olderThanLimit, omittedBySize, skippedLarge);
+    const notes = exportNotes(chatCount, messageCount, packed.selected.length, olderThanLimit, omittedBySize, skippedLarge, unavailable);
     if (chunked.files.length === 0) return { ...emptyExport(), notes, skippedLarge, omitted };
     return {
       files: chunked.files,
@@ -398,31 +433,36 @@ function loadBundle(
   header: ChatHeader,
   seen: Set<string>,
   valueBytes: number,
-  messageCount: number
-): { records: ChatRecord[]; skippedLarge: number } {
-  if (seen.has(header.composerId)) return { records: [], skippedLarge: 0 };
+  messageCount: number | null
+): { records: ChatRecord[]; skippedLarge: number; unavailable: number } {
+  if (seen.has(header.composerId)) return { records: [], skippedLarge: 0, unavailable: 0 };
   seen.add(header.composerId);
-  if (Buffer.byteLength(header.value) > valueBytes) return { records: [], skippedLarge: 1 };
+  if (Buffer.byteLength(header.value) > valueBytes) return { records: [], skippedLarge: 1, unavailable: 0 };
   const kv = loadKv(db, header.composerId, valueBytes, messageCount);
+  if (kv.unavailable) return { records: [], skippedLarge: kv.skippedLarge, unavailable: 1 };
+  if (kv.oversized) return { records: [], skippedLarge: Math.max(kv.skippedLarge, 1), unavailable: 0 };
+  if (kv.records.length === 0) return { records: [], skippedLarge: kv.skippedLarge, unavailable: 1 };
   const records: ChatRecord[] = [{ kind: 'header', header, complete: kv.skippedLarge === 0 }, ...kv.records];
   let skippedLarge = kv.skippedLarge;
+  let unavailable = 0;
   for (const childId of subComposerIds(kv.composerJson)) {
     if (seen.has(childId)) continue;
     const child = readHeader(db, childId);
     if (!child) continue;
     const nested = loadBundle(db, child, seen, valueBytes, messageCount);
-    records.push(...nested.records);
     skippedLarge += nested.skippedLarge;
+    unavailable += nested.unavailable;
+    records.push(...nested.records);
   }
-  return { records, skippedLarge };
+  return { records, skippedLarge, unavailable };
 }
 
 function loadKv(
   db: SqliteDatabase,
   composerId: string,
   valueBytes: number,
-  messageCount: number
-): { records: ChatRecord[]; skippedLarge: number; composerJson: string | null } {
+  messageCount: number | null
+): { records: ChatRecord[]; skippedLarge: number; composerJson: string | null; unavailable: boolean; oversized: boolean } {
   const records: ChatRecord[] = [];
   let skippedLarge = 0;
   let bubbleIds: string[] | null = null;
@@ -432,8 +472,13 @@ function loadKv(
   if (composerJson !== null) {
     const trimmed = trimComposerMessages(composerJson, messageCount);
     bubbleIds = trimmed.bubbleIds;
-    if (Buffer.byteLength(trimmed.json) > valueBytes) skippedLarge += 1;
-    else records.push({ kind: 'kv', composerId, key: composerKey, value: trimmed.json });
+    if (Buffer.byteLength(trimmed.json) > valueBytes) return { records: [], skippedLarge: 1, composerJson, unavailable: false, oversized: true };
+    records.push({ kind: 'kv', composerId, key: composerKey, value: trimmed.json });
+    const blobs = loadConversationBlobs(db, composerId, trimmed.json);
+    if (blobs.unavailable || blobs.oversized) {
+      return { records: [], skippedLarge, composerJson, unavailable: blobs.unavailable, oversized: blobs.oversized };
+    }
+    records.push(...blobs.records);
   }
   const bounds = prefixBounds(`bubbleId:${composerId}:`);
   const bubbles = db.prepare('SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key').all(bounds.start, bounds.end);
@@ -452,15 +497,114 @@ function loadKv(
     }
     records.push({ kind: 'kv', composerId, key: bubble.key, value: bubble.value });
   }
-  return { records, skippedLarge, composerJson };
+  return { records, skippedLarge, composerJson, unavailable: false, oversized: false };
+}
+
+// The history pane reads composerHeaders. Opening a chat follows blob ids in
+// conversationState, stored as agentKv:blob:<sha256>. Without those blobs Cursor
+// reports that the conversation data is missing.
+function loadConversationBlobs(
+  db: SqliteDatabase,
+  composerId: string,
+  composerJson: string
+): { records: ChatRecord[]; unavailable: boolean; oversized: boolean } {
+  const decoded = decodeConversationState(conversationStateOf(composerJson));
+  if (decoded && !readProtobuf(decoded)) return { records: [], unavailable: true, oversized: false };
+  const required = new Set(decoded ? requiredTurnIds(decoded) : []);
+  const queue = [...(decoded ? protobufBlobIds(decoded) : []), ...checkpointBlobIds(db, composerId)];
+  if (required.size === 0 && queue.length === 0) return { records: [], unavailable: false, oversized: false };
+
+  const readBlob = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?');
+  const seen = new Set<string>();
+  const loaded = new Set<string>();
+  const records: ChatRecord[] = [];
+  let bytes = 0;
+  while (queue.length > 0) {
+    const id = queue.pop();
+    if (!id || !BLOB_ID.test(id) || seen.has(id)) continue;
+    if (seen.size >= MAX_BLOBS_PER_CHAT) return { records: [], unavailable: false, oversized: true };
+    seen.add(id);
+    const row = readBlob.get(`${BLOB_PREFIX}${id}`) as { value?: unknown } | undefined;
+    const blob = row ? asBytes(row.value) : null;
+    if (!blob || createHash('sha256').update(blob).digest('hex') !== id) {
+      if (required.has(id)) return { records: [], unavailable: true, oversized: false };
+      continue;
+    }
+    bytes += blob.length;
+    if (bytes > MAX_CHAT_BLOB_BYTES) return { records: [], unavailable: false, oversized: true };
+    loaded.add(id);
+    records.push(...blobPieces(composerId, id, blob));
+    if (!isTextBlob(blob)) {
+      for (const nested of protobufBlobIds(blob)) queue.push(nested);
+    }
+  }
+  records.push(...checkpointPieces(db, composerId, loaded));
+  return { records, unavailable: false, oversized: false };
+}
+
+function blobPieces(composerId: string, id: string, bytes: Buffer): ChatRecord[] {
+  const key = `${BLOB_PREFIX}${id}`;
+  const utf8 = asUtf8(bytes);
+  if (utf8 !== null && Buffer.byteLength(utf8) <= BLOB_PART_BYTES) {
+    return [{ kind: 'kv', composerId, key, value: utf8 }];
+  }
+  const payload = bytes.toString('base64');
+  if (payload.length <= BLOB_PART_BYTES) {
+    return [{ kind: 'kv', composerId, key, value: payload, encoding: 'base64' }];
+  }
+  const partCount = Math.ceil(payload.length / BLOB_PART_BYTES);
+  const pieces: ChatRecord[] = [];
+  for (let part = 0; part < partCount; part += 1) {
+    pieces.push({
+      kind: 'kv',
+      composerId,
+      key,
+      value: payload.slice(part * BLOB_PART_BYTES, (part + 1) * BLOB_PART_BYTES),
+      encoding: 'base64',
+      part,
+      parts: partCount,
+    });
+  }
+  return pieces;
+}
+
+function checkpointBlobIds(db: SqliteDatabase, composerId: string): string[] {
+  const ids: string[] = [];
+  const direct = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`${CHECKPOINT_PREFIX}${composerId}`) as { value?: unknown } | undefined;
+  const directId = direct ? asText(direct.value)?.trim() : undefined;
+  if (directId && BLOB_ID.test(directId)) ids.push(directId);
+  const bounds = prefixBounds(`${BUBBLE_CHECKPOINT_PREFIX}${composerId}:`);
+  const rows = db.prepare('SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ?').all(bounds.start, bounds.end);
+  for (const row of rows) {
+    const id = asText((row as { value?: unknown }).value)?.trim();
+    if (id && BLOB_ID.test(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function checkpointPieces(db: SqliteDatabase, composerId: string, loaded: Set<string>): ChatRecord[] {
+  const records: ChatRecord[] = [];
+  const directKey = `${CHECKPOINT_PREFIX}${composerId}`;
+  const direct = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(directKey) as { value?: unknown } | undefined;
+  const directId = direct ? asText(direct.value)?.trim() : undefined;
+  if (directId && loaded.has(directId)) records.push({ kind: 'kv', composerId, key: directKey, value: directId });
+  const bounds = prefixBounds(`${BUBBLE_CHECKPOINT_PREFIX}${composerId}:`);
+  const rows = db.prepare('SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ?').all(bounds.start, bounds.end);
+  for (const row of rows) {
+    const record = row as { key?: unknown; value?: unknown };
+    if (typeof record.key !== 'string' || !isCheckpointKey(composerId, record.key)) continue;
+    const id = asText(record.value)?.trim();
+    if (id && loaded.has(id)) records.push({ kind: 'kv', composerId, key: record.key, value: id });
+  }
+  return records;
 }
 
 function selectBubbles(
   bubbles: Array<{ key: string; value: string }>,
   bubbleIds: string[] | null,
-  messageLimit: number
+  messageLimit: number | null
 ): Array<{ key: string; value: string }> {
-  if (messageLimit <= 0) return [];
+  if (messageLimit !== null && messageLimit <= 0) return [];
   if (bubbleIds) {
     const byId = new Map<string, { key: string; value: string }>();
     for (const bubble of bubbles) {
@@ -473,7 +617,7 @@ function selectBubbles(
     });
   }
   const ordered = [...bubbles].sort((left, right) => bubbleTime(left.value) - bubbleTime(right.value) || left.key.localeCompare(right.key));
-  return ordered.slice(-messageLimit);
+  return messageLimit === null ? ordered : ordered.slice(-messageLimit);
 }
 
 function loadLegacy(userFolder: string, budget: number, valueBytes: number): { records: ChatRecord[]; skippedLarge: number; omitted: number } {
@@ -510,7 +654,7 @@ function loadLegacy(userFolder: string, budget: number, valueBytes: number): { r
 
 function applyGlobal(
   db: SqliteDatabase,
-  groups: Map<string, { header?: ChatHeader; complete: boolean; kv: Array<{ key: string; value: string }> }>,
+  groups: Map<string, { header?: ChatHeader; complete: boolean; kv: StoredKv[] }>,
   workspaces: WorkspaceFolder[]
 ): { applied: number; kept: number } {
   if (!tableExists(db, 'composerHeaders')) return { applied: 0, kept: 0 };
@@ -522,16 +666,18 @@ function applyGlobal(
   let kept = 0;
   for (const [composerId, group] of groups) {
     if (!group.header) continue;
+    const assembled = assembleKv(group.kv).filter((item) => isAllowedKv(composerId, item.key));
     const row = current.get(composerId) as { lastUpdatedAt?: unknown } | undefined;
     if (row && !remoteHeaderWins(asNumber(row.lastUpdatedAt), group.header.lastUpdatedAt)) {
       kept += 1;
+      if (hasKv) upsertKv(db, assembled.filter((item) => isBlobKey(item.key)));
       continue;
     }
     const remapped = remapHeaderValue(group.header.value, group.header.workspaceId, workspaces);
     upsertHeader(db, columns, { ...group.header, workspaceId: remapped.workspaceId, value: remapped.value });
-    if (hasKv && group.kv.length > 0) {
-      if (group.complete) replaceKv(db, composerId, group.kv);
-      else upsertKv(db, group.kv);
+    if (hasKv && assembled.length > 0) {
+      if (group.complete) replaceKv(db, composerId, assembled);
+      else upsertKv(db, assembled);
     }
     applied += 1;
   }
@@ -608,16 +754,61 @@ function upsertHeader(db: SqliteDatabase, columns: Set<string>, header: ChatHead
   db.prepare(sql).run(...fields.map((field) => headerValue(header, field)));
 }
 
-function upsertKv(db: SqliteDatabase, kv: Array<{ key: string; value: string }>): void {
+function upsertKv(db: SqliteDatabase, kv: Array<{ key: string; value: string | Buffer }>): void {
   const insert = db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const item of kv) insert.run(item.key, item.value);
 }
 
-function replaceKv(db: SqliteDatabase, composerId: string, kv: Array<{ key: string; value: string }>): void {
+function replaceKv(db: SqliteDatabase, composerId: string, kv: Array<{ key: string; value: string | Buffer }>): void {
   const bounds = prefixBounds(`bubbleId:${composerId}:`);
+  const checkpointBounds = prefixBounds(`${BUBBLE_CHECKPOINT_PREFIX}${composerId}:`);
   db.prepare('DELETE FROM cursorDiskKV WHERE key = ?').run(`composerData:${composerId}`);
   db.prepare('DELETE FROM cursorDiskKV WHERE key >= ? AND key < ?').run(bounds.start, bounds.end);
+  db.prepare('DELETE FROM cursorDiskKV WHERE key = ?').run(`${CHECKPOINT_PREFIX}${composerId}`);
+  db.prepare('DELETE FROM cursorDiskKV WHERE key >= ? AND key < ?').run(checkpointBounds.start, checkpointBounds.end);
   upsertKv(db, kv.filter((item) => isAllowedKv(composerId, item.key)));
+}
+
+function assembleKv(items: StoredKv[]): Array<{ key: string; value: string | Buffer }> {
+  const groups = new Map<string, StoredKv[]>();
+  for (const item of items) {
+    const list = groups.get(item.key) ?? [];
+    list.push(item);
+    groups.set(item.key, list);
+  }
+  const assembled: Array<{ key: string; value: string | Buffer }> = [];
+  for (const [key, pieces] of groups) {
+    const value = decodePieces(key, pieces);
+    if (value !== null) assembled.push({ key, value });
+  }
+  return assembled;
+}
+
+function decodePieces(key: string, pieces: StoredKv[]): string | Buffer | null {
+  const encoding = pieces[0]?.encoding ?? 'utf8';
+  if (!pieces[0] || pieces.some((piece) => (piece.encoding ?? 'utf8') !== encoding)) return null;
+  const numbered = pieces.some((piece) => piece.part !== undefined || piece.parts !== undefined);
+  let payload = '';
+  if (!numbered) {
+    const conflict = pieces.length > 1 && pieces.some((piece) => piece.value !== pieces[0].value);
+    if (conflict && isBlobKey(key)) return null;
+    payload = conflict ? pieces[pieces.length - 1].value : pieces[0].value;
+  } else {
+    const expected = pieces[0].parts ?? 0;
+    if (expected < 1 || expected > 100 || pieces.length !== expected) return null;
+    if (pieces.some((piece) => piece.parts !== expected || piece.part === undefined)) return null;
+    const ordered = [...pieces].sort((left, right) => (left.part ?? 0) - (right.part ?? 0));
+    for (let index = 0; index < ordered.length; index += 1) {
+      if (ordered[index].part !== index) return null;
+    }
+    payload = ordered.map((piece) => piece.value).join('');
+  }
+  const bytes = encoding === 'base64' ? Buffer.from(payload, 'base64') : Buffer.from(payload, 'utf8');
+  if (isBlobKey(key)) {
+    if (createHash('sha256').update(bytes).digest('hex') !== key.slice(BLOB_PREFIX.length)) return null;
+    return bytes;
+  }
+  return encoding === 'base64' ? bytes : payload;
 }
 
 function readHeaders(db: SqliteDatabase): ChatHeader[] {
@@ -657,10 +848,10 @@ function headerFromRow(row: unknown): ChatHeader | null {
 }
 
 function groupRecords(records: ChatRecord[]): {
-  groups: Map<string, { header?: ChatHeader; complete: boolean; kv: Array<{ key: string; value: string }> }>;
+  groups: Map<string, { header?: ChatHeader; complete: boolean; kv: StoredKv[] }>;
   legacy: Map<string, { composerData?: string; chatData?: string }>;
 } {
-  const groups = new Map<string, { header?: ChatHeader; complete: boolean; kv: Array<{ key: string; value: string }> }>();
+  const groups = new Map<string, { header?: ChatHeader; complete: boolean; kv: StoredKv[] }>();
   const legacy = new Map<string, { composerData?: string; chatData?: string }>();
   for (const record of records) {
     if (record.kind === 'header') {
@@ -672,7 +863,13 @@ function groupRecords(records: ChatRecord[]): {
     }
     if (record.kind === 'kv') {
       const group = groups.get(record.composerId) ?? { complete: true, kv: [] };
-      group.kv.push({ key: record.key, value: record.value });
+      group.kv.push({
+        key: record.key,
+        value: record.value,
+        encoding: record.encoding,
+        part: record.part,
+        parts: record.parts,
+      });
       groups.set(record.composerId, group);
       continue;
     }
@@ -715,7 +912,17 @@ function readRecord(value: unknown): ChatRecord | null {
     if (typeof record.composerId !== 'string' || !isComposerId(record.composerId)) return null;
     if (typeof record.key !== 'string' || typeof record.value !== 'string') return null;
     if (!isAllowedKv(record.composerId, record.key)) return null;
-    return { kind: 'kv', composerId: record.composerId, key: record.key, value: record.value };
+    const piece: Extract<ChatRecord, { kind: 'kv' }> = { kind: 'kv', composerId: record.composerId, key: record.key, value: record.value };
+    if (record.encoding === 'base64') piece.encoding = 'base64';
+    else if (record.encoding !== undefined) return null;
+    if (record.part !== undefined || record.parts !== undefined) {
+      if (typeof record.part !== 'number' || typeof record.parts !== 'number') return null;
+      if (!Number.isInteger(record.part) || !Number.isInteger(record.parts)) return null;
+      if (record.part < 0 || record.parts < 1 || record.parts > 100 || record.part >= record.parts) return null;
+      piece.part = record.part;
+      piece.parts = record.parts;
+    }
+    return piece;
   }
   if (record.kind === 'legacy') {
     if (record.legacyKey !== LEGACY_COMPOSER && record.legacyKey !== LEGACY_CHAT) return null;
@@ -855,9 +1062,16 @@ function bubbleTime(value: string): number {
 function subComposerIds(composerJson: string | null): string[] {
   if (!composerJson) return [];
   try {
-    const parsed = JSON.parse(composerJson) as { subComposerIds?: unknown };
-    if (!Array.isArray(parsed.subComposerIds)) return [];
-    return parsed.subComposerIds.filter((id): id is string => typeof id === 'string' && isComposerId(id));
+    const parsed = JSON.parse(composerJson) as { subComposerIds?: unknown; subagentComposerIds?: unknown };
+    const lists = [parsed.subComposerIds, parsed.subagentComposerIds];
+    const ids: string[] = [];
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      for (const id of list) {
+        if (typeof id === 'string' && isComposerId(id)) ids.push(id);
+      }
+    }
+    return ids;
   } catch {
     return [];
   }
@@ -911,7 +1125,18 @@ function isComposerId(value: string): boolean {
 }
 
 function isAllowedKv(composerId: string, key: string): boolean {
-  return key === `composerData:${composerId}` || key.startsWith(`bubbleId:${composerId}:`);
+  return key === `composerData:${composerId}` || key.startsWith(`bubbleId:${composerId}:`) || isBlobKey(key) || isCheckpointKey(composerId, key);
+}
+
+function isBlobKey(key: string): boolean {
+  return key.startsWith(BLOB_PREFIX) && BLOB_ID.test(key.slice(BLOB_PREFIX.length));
+}
+
+function isCheckpointKey(composerId: string, key: string): boolean {
+  if (key === `${CHECKPOINT_PREFIX}${composerId}`) return true;
+  const prefix = `${BUBBLE_CHECKPOINT_PREFIX}${composerId}:`;
+  if (!key.startsWith(prefix) || key.length > prefix.length + 200) return false;
+  return /^[A-Za-z0-9_.:-]+$/.test(key.slice(prefix.length));
 }
 
 function asNumber(value: unknown): number | null {
@@ -928,6 +1153,118 @@ function asText(value: unknown): string | null {
   if (typeof value === 'string') return value;
   if (value instanceof Uint8Array) return Buffer.from(value).toString('utf8');
   return null;
+}
+
+function asBytes(value: unknown): Buffer | null {
+  if (typeof value === 'string') return Buffer.from(value);
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  return null;
+}
+
+function asUtf8(bytes: Buffer): string | null {
+  const text = bytes.toString('utf8');
+  return Buffer.from(text, 'utf8').equals(bytes) ? text : null;
+}
+
+function conversationStateOf(composerJson: string): string | null {
+  try {
+    const parsed = JSON.parse(composerJson) as { conversationState?: unknown };
+    return typeof parsed.conversationState === 'string' ? parsed.conversationState : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeConversationState(value: string | null): Buffer | null {
+  if (!value || value === '~') return null;
+  const body = value.startsWith('~') ? value.slice(1) : value;
+  if (!body || body.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body)) return null;
+  const buf = Buffer.from(body, 'base64');
+  return buf.length > 0 ? buf : null;
+}
+
+function requiredTurnIds(buf: Buffer): string[] {
+  const fields = readProtobuf(buf);
+  if (!fields) return [];
+  return fields.flatMap((field) => (field.field === 1 && field.bytes?.length === 32 ? [field.bytes.toString('hex')] : []));
+}
+
+function protobufBlobIds(buf: Buffer, depth = 0): string[] {
+  const fields = readProtobuf(buf);
+  if (!fields) return [];
+  const ids: string[] = [];
+  for (const field of fields) {
+    if (!field.bytes) continue;
+    if (field.bytes.length === 32) ids.push(field.bytes.toString('hex'));
+    else if (depth < 6 && field.bytes.length > 32) ids.push(...protobufBlobIds(field.bytes, depth + 1));
+  }
+  return ids;
+}
+
+function readProtobuf(buf: Buffer): Array<{ field: number; bytes?: Buffer }> | null {
+  const fields: Array<{ field: number; bytes?: Buffer }> = [];
+  let offset = 0;
+  while (offset < buf.length) {
+    const tag = readVarint(buf, offset);
+    if (!tag) return null;
+    offset = tag.next;
+    const field = Math.floor(tag.value / 8);
+    const wire = tag.value % 8;
+    if (field === 0) return null;
+    if (wire === 0) {
+      const value = readVarint(buf, offset);
+      if (!value) return null;
+      offset = value.next;
+      fields.push({ field });
+    } else if (wire === 2) {
+      const length = readVarint(buf, offset);
+      if (!length || length.value < 0) return null;
+      const start = length.next;
+      if (start + length.value > buf.length) return null;
+      fields.push({ field, bytes: Buffer.from(buf.subarray(start, start + length.value)) });
+      offset = start + length.value;
+    } else if (wire === 1) {
+      if (offset + 8 > buf.length) return null;
+      offset += 8;
+      fields.push({ field });
+    } else if (wire === 5) {
+      if (offset + 4 > buf.length) return null;
+      offset += 4;
+      fields.push({ field });
+    } else {
+      return null;
+    }
+  }
+  return fields;
+}
+
+function readVarint(buf: Buffer, offset: number): { value: number; next: number } | null {
+  let value = 0;
+  let factor = 1;
+  let cursor = offset;
+  for (let byteIndex = 0; cursor < buf.length && byteIndex < 10; byteIndex += 1) {
+    const byte = buf[cursor];
+    cursor += 1;
+    value += (byte & 0x7f) * factor;
+    if ((byte & 0x80) === 0) return { value, next: cursor };
+    factor *= 128;
+  }
+  return null;
+}
+
+function isTextBlob(buf: Buffer): boolean {
+  const text = asUtf8(buf);
+  if (text === null) return false;
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return true;
+  const sample = Math.min(buf.length, 256);
+  if (sample === 0) return true;
+  let printable = 0;
+  for (let index = 0; index < sample; index += 1) {
+    const byte = buf[index];
+    if (byte === 9 || byte === 10 || byte === 13 || (byte >= 32 && byte <= 126)) printable += 1;
+  }
+  return printable / sample > 0.9;
 }
 
 function parseObject(value: string): Record<string, unknown> | null {
@@ -957,18 +1294,24 @@ function preserveResult(note: string): ChatExportResult {
 }
 
 function exportNotes(
-  chatCount: number,
-  messageCount: number,
+  chatCount: number | null,
+  messageCount: number | null,
   synced: number,
   olderThanLimit: number,
   omittedBySize: number,
-  skippedLarge: number
+  skippedLarge: number,
+  unavailable: number
 ): string[] {
   const notes: string[] = [];
-  if (synced > 0) notes.push(`Included ${synced} chat(s), each with its last ${messageCount} message(s).`);
-  if (olderThanLimit > 0) notes.push(`Kept the ${chatCount} newest chats. ${olderThanLimit} older chat(s) stayed on this machine.`);
+  if (synced > 0) {
+    notes.push(messageCount === null
+      ? `Included ${synced} chat(s) with the conversation data needed to open them.`
+      : `Included ${synced} chat(s). Each keeps its last ${messageCount} bubble message(s) and the agent transcript needed to open it.`);
+  }
+  if (chatCount !== null && olderThanLimit > 0) notes.push(`Kept the ${chatCount} newest chats. ${olderThanLimit} older chat(s) stayed on this machine.`);
   if (omittedBySize > 0) notes.push(`${omittedBySize} chat(s) did not fit in the upload and stayed on this machine.`);
-  if (skippedLarge > 0) notes.push(`Skipped ${skippedLarge} chat value(s) larger than 1 MB.`);
+  if (skippedLarge > 0) notes.push(`Skipped ${skippedLarge} chat value(s) that were too large to upload.`);
+  if (unavailable > 0) notes.push(`Left out ${unavailable} chat(s) whose conversation data is missing.`);
   return notes;
 }
 

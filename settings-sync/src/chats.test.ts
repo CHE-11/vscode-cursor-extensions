@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -259,6 +260,46 @@ test('export keeps the last 30 messages of the 15 newest chats', async () => {
   rmSync(folder, { recursive: true, force: true });
 });
 
+test('gist sync keeps every chat and every message that fits', async () => {
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  const messageCount = 32;
+  for (let index = 1; index <= 16; index += 1) {
+    const bubbles = Array.from({ length: messageCount }, (_, message) => ({
+      id: `m${message}`,
+      value: JSON.stringify({ text: `m${message}` }),
+    }));
+    insertComposer(db, composerId(index), index, {
+      bubbles,
+      composer: {
+        fullConversationHeadersOnly: bubbles.map((bubble) => ({ bubbleId: bubble.id, type: 1 })),
+        name: `chat-${index}`,
+      },
+    });
+  }
+  db.close();
+
+  const exported = await exportChats(folder, {
+    budgetBytes: 8_000_000,
+    fileBytes: 900_000,
+    valueBytes: 1_000_000,
+    allChats: true,
+  });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  const ids = records.flatMap((record) => (record.kind === 'header' ? [record.header.composerId] : []));
+  assert.deepEqual(ids, Array.from({ length: 16 }, (_, index) => composerId(16 - index)));
+  assert.equal(exported.synced, 16);
+  assert.equal(exported.omitted, 0);
+
+  const newest = composerId(16);
+  const keptIds = Array.from({ length: messageCount }, (_, index) => `m${index}`);
+  const bubbleKeys = records.flatMap((record) => (
+    record.kind === 'kv' && record.key.startsWith(`bubbleId:${newest}:`) ? [record.key.split(':').at(-1)] : []
+  ));
+  assert.deepEqual(bubbleKeys, keptIds);
+  rmSync(folder, { recursive: true, force: true });
+});
+
 test('messages without a conversation list keep the latest 30 by time', async () => {
   const folder = tempUser();
   const db = openGlobal(folder);
@@ -274,6 +315,157 @@ test('messages without a conversation list keep the latest 30 by time', async ()
     record.kind === 'kv' && record.key.startsWith(`bubbleId:${NEWER}:`) ? [record.key.split(':').at(-1)] : []
   ));
   assert.deepEqual(bubbleKeys, times.slice(2).map((item) => item.id));
+  rmSync(folder, { recursive: true, force: true });
+});
+
+test('an empty bubble index keeps the conversation map', () => {
+  const trimmed = trimComposerMessages(JSON.stringify({
+    fullConversationHeadersOnly: [],
+    conversationMap: { m0: { text: 'stay' } },
+    conversationState: '~',
+  }), 30);
+  const parsed = JSON.parse(trimmed.json) as { conversationMap: Record<string, unknown> };
+  assert.deepEqual(parsed.conversationMap, { m0: { text: 'stay' } });
+  assert.equal(trimmed.bubbleIds, null);
+});
+
+test('a chat exports the conversation blobs required to open it', async () => {
+  const text = Buffer.from('{"role":"user","content":"hello"}');
+  const id = sha256(text);
+  const source = tempUser();
+  const db = openGlobal(source);
+  insertComposer(db, NEWER, 20, {
+    bubble: 'visible',
+    composer: {
+      conversationState: conversationState([Buffer.from(id, 'hex')]),
+      fullConversationHeadersOnly: [],
+    },
+  });
+  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`agentKv:blob:${id}`, text);
+  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`agentKv:checkpoint:${NEWER}`, id);
+  db.close();
+
+  const exported = await exportChats(source, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  assert.equal(records.some((record) => record.kind === 'header' && record.header.composerId === NEWER), true);
+  assert.equal(records.some((record) => record.kind === 'kv' && record.key === `agentKv:blob:${id}` && record.value === text.toString()), true);
+  assert.equal(records.some((record) => record.kind === 'kv' && record.key === `agentKv:checkpoint:${NEWER}` && record.value === id), true);
+  assert.equal(records.some((record) => record.kind === 'kv' && record.key === `bubbleId:${NEWER}:1`), true);
+
+  const target = tempUser();
+  openGlobal(target).close();
+  const imported = await importChats(target, Object.fromEntries(exported.files.map((file) => [file.gistName, file.content])));
+  assert.equal(imported.applied, 1);
+  const check = openGlobal(target);
+  const blob = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${id}`) as { value: unknown };
+  assert.equal(asBytes(blob.value).toString(), text.toString());
+  const checkpoint = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:checkpoint:${NEWER}`) as { value: unknown };
+  assert.equal(asBytes(checkpoint.value).toString(), id);
+  check.close();
+  rmSync(source, { recursive: true, force: true });
+  rmSync(target, { recursive: true, force: true });
+});
+
+test('a nested conversation blob is included and binary bytes round-trip', async () => {
+  const child = Buffer.from([0x00, 0xff, 0x0a, 0xfe, 0x80, 0x7f]);
+  const childId = sha256(child);
+  const parent = Buffer.concat([Buffer.from([0x0a, 0x20]), Buffer.from(childId, 'hex')]);
+  const parentId = sha256(parent);
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  insertComposer(db, NEWER, 9, {
+    composer: { conversationState: conversationState([Buffer.from(parentId, 'hex')]) },
+  });
+  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`agentKv:blob:${parentId}`, parent);
+  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`agentKv:blob:${childId}`, child);
+  db.close();
+
+  const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  assert.equal(records.some((record) => record.kind === 'kv' && record.key === `agentKv:blob:${parentId}`), true);
+  assert.equal(records.some((record) => record.kind === 'kv' && record.key === `agentKv:blob:${childId}` && record.encoding === 'base64'), true);
+
+  const target = tempUser();
+  openGlobal(target).close();
+  await importChats(target, Object.fromEntries(exported.files.map((file) => [file.gistName, file.content])));
+  const check = openGlobal(target);
+  const storedParent = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${parentId}`) as { value: unknown };
+  const storedChild = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${childId}`) as { value: unknown };
+  assert.ok(asBytes(storedParent.value).equals(parent));
+  assert.ok(asBytes(storedChild.value).equals(child));
+  check.close();
+  rmSync(folder, { recursive: true, force: true });
+  rmSync(target, { recursive: true, force: true });
+});
+
+test('a chat with a missing conversation blob is not exported', async () => {
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  insertComposer(db, NEWER, 20, {
+    composer: { conversationState: conversationState([Buffer.alloc(32, 7)]) },
+  });
+  db.close();
+
+  const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const payload = exported.files.map((file) => file.content).join('\n');
+  assert.equal(payload.includes(NEWER), false);
+  assert.equal(exported.notes.some((note) => note.includes('missing')), true);
+  rmSync(folder, { recursive: true, force: true });
+});
+
+test('a large conversation blob is split and restored', async () => {
+  const text = Buffer.alloc(1_200_000, 0x61);
+  const id = sha256(text);
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  insertComposer(db, NEWER, 4, {
+    composer: { conversationState: conversationState([Buffer.from(id, 'hex')]) },
+  });
+  db.prepare('INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)').run(`agentKv:blob:${id}`, text);
+  db.close();
+
+  const exported = await exportChats(folder, { budgetBytes: 8_000_000, fileBytes: 900_000, valueBytes: 1_000_000 });
+  const records = exported.files.flatMap((file) => (JSON.parse(file.content) as { records: ChatRecord[] }).records);
+  const parts = records.filter((record) => record.kind === 'kv' && record.key === `agentKv:blob:${id}`);
+  assert.ok(parts.length > 1);
+
+  const target = tempUser();
+  openGlobal(target).close();
+  await importChats(target, Object.fromEntries(exported.files.map((file) => [file.gistName, file.content])));
+  const check = openGlobal(target);
+  const stored = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${id}`) as { value: unknown };
+  assert.ok(asBytes(stored.value).equals(text));
+  check.close();
+  rmSync(folder, { recursive: true, force: true });
+  rmSync(target, { recursive: true, force: true });
+});
+
+test('a kept local chat still receives missing conversation blobs', async () => {
+  const text = Buffer.from('{"role":"user","content":"kept"}');
+  const id = sha256(text);
+  const tamperedId = sha256(Buffer.from('other'));
+  const folder = tempUser();
+  const db = openGlobal(folder);
+  insertComposer(db, NEWER, 50, { bubble: 'local-copy' });
+  db.close();
+  const imported = await importChats(folder, {
+    'chats|000.json': JSON.stringify({
+      v: 1,
+      records: [
+        { kind: 'header', complete: true, header: storedHeader(NEWER, 10) },
+        { kind: 'kv', composerId: NEWER, key: `agentKv:blob:${id}`, value: text.toString() },
+        { kind: 'kv', composerId: NEWER, key: `agentKv:blob:${tamperedId}`, value: 'tampered' },
+      ],
+    }),
+  });
+  assert.equal(imported.kept, 1);
+  const check = openGlobal(folder);
+  const blob = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${id}`) as { value: unknown };
+  assert.equal(asBytes(blob.value).toString(), text.toString());
+  assert.equal(check.prepare('SELECT key FROM cursorDiskKV WHERE key = ?').get(`agentKv:blob:${tamperedId}`), undefined);
+  const bubble = check.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`bubbleId:${NEWER}:1`) as { value: string };
+  assert.equal(bubble.value, 'local-copy');
+  check.close();
   rmSync(folder, { recursive: true, force: true });
 });
 
@@ -304,6 +496,20 @@ test('legacy workspace chats merge into the matching workspace database', async 
   check.close();
   rmSync(folder, { recursive: true, force: true });
 });
+
+function sha256(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function conversationState(ids: Buffer[]): string {
+  return `~${Buffer.concat(ids.map((id) => Buffer.concat([Buffer.from([0x0a, 0x20]), id]))).toString('base64')}`;
+}
+
+function asBytes(value: unknown): Buffer {
+  if (typeof value === 'string') return Buffer.from(value);
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  return Buffer.alloc(0);
+}
 
 function kv(composerId: string, bubbleId: string, value: string): ChatRecord {
   return { kind: 'kv', composerId, key: `bubbleId:${composerId}:${bubbleId}`, value };

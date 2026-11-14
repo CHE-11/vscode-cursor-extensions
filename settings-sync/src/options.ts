@@ -3,7 +3,7 @@ import type { SyncLocation } from './settings';
 export type ToggleKey = 'autoUpload' | 'autoDownload' | 'forceUpload' | 'forceDownload' | 'quietSync' | 'syncChats';
 
 export interface SyncAction {
-  id: 'upload' | 'download' | 'clearAndUpload' | 'viewLogs' | ToggleKey | 'syncLocation' | 'setToken' | 'chooseGist' | 'editLocal' | 'openSettings' | 'downloadPublic' | 'sharePublic' | 'addCustomFile' | 'importCustomFile' | 'chatCount' | 'messageCount' | 'how' | 'reset';
+  id: 'upload' | 'download' | 'clearAndUpload' | 'viewLogs' | ToggleKey | 'syncLocation' | 'selectFolder' | 'setToken' | 'chooseGist' | 'editLocal' | 'openSettings' | 'downloadPublic' | 'sharePublic' | 'addCustomFile' | 'importCustomFile' | 'chatCount' | 'messageCount' | 'how' | 'reset';
   label: string;
   icon: string;
   inOptions: boolean;
@@ -13,6 +13,7 @@ export interface SyncAction {
 }
 
 const GIST_ONLY = new Set<SyncAction['id']>(['setToken', 'chooseGist', 'downloadPublic', 'sharePublic']);
+const FOLDER_ONLY = new Set<SyncAction['id']>(['selectFolder', 'syncChats', 'chatCount', 'messageCount']);
 
 export const syncActions: SyncAction[] = [
   { id: 'upload', label: 'Upload', icon: 'cloud-upload', inOptions: false },
@@ -23,6 +24,7 @@ export const syncActions: SyncAction[] = [
 
 export const optionActions: SyncAction[] = [
   { id: 'syncLocation', label: 'Sync Location', icon: 'folder', inOptions: true },
+  { id: 'selectFolder', label: 'Select Local Folder', icon: 'folder-opened', inOptions: true },
   { id: 'setToken', label: 'Set GitHub Token', icon: 'key', inOptions: true },
   { id: 'chooseGist', label: 'Choose Gist', icon: 'github', inOptions: true },
   { id: 'editLocal', label: 'Edit Local Settings', icon: 'json', inOptions: true },
@@ -48,6 +50,6 @@ export function optionsMenu(): SyncAction[] {
 }
 
 export function actionsFor(location: SyncLocation, actions: SyncAction[]): SyncAction[] {
-  if (location !== 'folder') return actions;
-  return actions.filter((action) => !GIST_ONLY.has(action.id));
+  const hidden = location === 'folder' ? GIST_ONLY : FOLDER_ONLY;
+  return actions.filter((action) => !hidden.has(action.id));
 }

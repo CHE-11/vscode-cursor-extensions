@@ -103,8 +103,12 @@ export class SettingsSyncView implements vscode.TreeDataProvider<SyncNode> {
       item.description = String(detail.messageCount);
       item.tooltip = `Messages per chat: ${detail.messageCount}`;
     } else if (action.id === 'syncLocation') {
-      item.description = settings.location === 'folder' ? settings.folder || 'Not set' : 'Gist';
-      item.tooltip = settings.location === 'folder' ? settings.folder || 'Not set' : 'GitHub Gist';
+      const label = settings.location === 'folder' ? 'Local Folder' : 'Gist';
+      item.description = label;
+      item.tooltip = label;
+    } else if (action.id === 'selectFolder') {
+      item.description = settings.folder || 'Not set';
+      item.tooltip = settings.folder ? `Folder: ${settings.folder}` : 'No folder selected';
     } else if (action.id === 'setToken') {
       item.description = detail.token;
       item.tooltip = `Token: ${detail.token}`;
