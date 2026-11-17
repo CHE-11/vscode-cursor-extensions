@@ -12,7 +12,7 @@ Maintained by che-11. Syntax highlighting comes from [vscode-styled-jsx](https:/
 
 Inside those CSS regions the extension provides completion, hover, diagnostics, color decorators, document symbols, go to definition, references, highlights, and quick fixes. It follows the editor's CSS settings.
 
-Template expressions such as `${props.color}` stay in the source, and the language features skip them.
+Template expressions such as `${props.color}` stay in the source, and the language features skip them. A unit glued to an expression, such as `width: ${panel}%;`, is part of that value.
 
 ## Development
 

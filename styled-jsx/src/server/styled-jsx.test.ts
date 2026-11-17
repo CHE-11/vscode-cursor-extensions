@@ -136,6 +136,40 @@ test('an interpolated property value is not a css error', () => {
   }
 });
 
+test('a percentage unit after an interpolation is valid css', () => {
+  const source = [
+    'export const panel = css`',
+    '  div {',
+    '    width: ${resizePanel1Width}%;',
+    '    height: calc(${resizePanel1Width}% - 8px);',
+    '    padding: ;',
+    '  }',
+    '`;',
+  ].join('\n');
+
+  const expression = '${resizePanel1Width}';
+  const lines = maskedLines(source);
+  assert.equal(lines?.[2], `    width: ${'x' + ' '.repeat(expression.length - 2)}0%;`);
+  assert.equal(lines?.[3].includes('calc('), true);
+  assert.equal(lines?.[3].includes('0% - 8px'), true);
+  assert.deepEqual(cssDiagnostics(source).map((item) => item.message), ['property value expected']);
+});
+
+test('a bare percentage is still a css error', () => {
+  const source = [
+    'export const panel = css`',
+    '  div {',
+    '    width: %;',
+    '  }',
+    '`;',
+  ].join('\n');
+
+  assert.deepEqual(cssDiagnostics(source).map((item) => item.message), [
+    'at-rule or selector expected',
+    'property value expected',
+  ]);
+});
+
 test('a missing property value is still reported beside an interpolation', () => {
   const source = [
     'export const button = css`',

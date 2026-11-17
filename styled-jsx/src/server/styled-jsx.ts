@@ -232,7 +232,7 @@ function replaceInterpolations(css: string, offset: number, interpolations: Styl
       const expressionEnd = findInterpolationEnd(css, index + 2);
       const end = expressionEnd === -1 ? css.length : expressionEnd;
       interpolations.push({ start: offset + index, end: offset + end });
-      result += interpolationPlaceholder(css.slice(index, end));
+      result += interpolationPlaceholder(css.slice(index, end), css[end] === '%');
       index = end - 1;
       continue;
     }
@@ -242,22 +242,29 @@ function replaceInterpolations(css: string, offset: number, interpolations: Styl
 }
 
 // `${value}` is valid styled-jsx. A stand-in ident keeps the property from looking empty to the CSS checker.
-function interpolationPlaceholder(text: string): string {
-  let result = '';
-  let insertedValue = false;
-  for (const char of text) {
+// `%` cannot follow an ident, so `width: ${value}%;` ends the stand-in with `0` and the checker sees `0%`.
+function interpolationPlaceholder(text: string, percentSuffix: boolean): string {
+  const chars = Array.from(text);
+  let first = -1;
+  let last = -1;
+  for (let index = 0; index < chars.length; index++) {
+    const char = chars[index];
     if (char === '\n' || char === '\r') {
-      result += char;
       continue;
     }
-    if (!insertedValue) {
-      result += 'x';
-      insertedValue = true;
-      continue;
+    if (first === -1) {
+      first = index;
     }
-    result += ' ';
+    last = index;
+    chars[index] = ' ';
   }
-  return result;
+  if (first !== -1) {
+    chars[first] = 'x';
+  }
+  if (percentSuffix && last !== -1) {
+    chars[last] = '0';
+  }
+  return chars.join('');
 }
 
 function diagnosticOverlapsInterpolation(
